@@ -1,6 +1,6 @@
 import React from 'react';
 import { Task } from '../../db/db.js';
-import { Tag, Clock, Bot } from 'lucide-react';
+import { Clock, Bot, Layers } from 'lucide-react';
 
 interface TaskCardProps {
   task: Task;
@@ -49,7 +49,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onClick }) => {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '12px', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.05)', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
           <Bot size={13} color="var(--accent-violet)" />
-          <span>AI Managed</span>
+          <span style={{ fontWeight: 500 }}>{task.session_id ? task.session_id : 'AI Managed'}</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
           <Clock size={12} />

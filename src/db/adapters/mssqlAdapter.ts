@@ -1,5 +1,5 @@
 import sql from 'mssql';
-import { IDatabaseAdapter, Workflow, Task, ActivityLog, Status, EventListener } from '../types.js';
+import { IDatabaseAdapter, Workflow, Task, ActivityLog, Status, Session, EventListener } from '../types.js';
 
 export class MssqlAdapter implements IDatabaseAdapter {
   private pool!: sql.ConnectionPool;
@@ -51,9 +51,23 @@ export class MssqlAdapter implements IDatabaseAdapter {
         created_at NVARCHAR(64) NOT NULL
       );
 
+      IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='sessions' AND xtype='U')
+      CREATE TABLE sessions (
+        id NVARCHAR(64) PRIMARY KEY,
+        name NVARCHAR(255) NOT NULL,
+        description NVARCHAR(MAX) NOT NULL,
+        agent_id NVARCHAR(128),
+        status NVARCHAR(32) NOT NULL DEFAULT 'active',
+        workflow_id NVARCHAR(64) NOT NULL,
+        created_at NVARCHAR(64) NOT NULL,
+        updated_at NVARCHAR(64) NOT NULL,
+        FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE CASCADE
+      );
+
       IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='tasks' AND xtype='U')
       CREATE TABLE tasks (
         id NVARCHAR(64) PRIMARY KEY,
+        session_id NVARCHAR(64) NOT NULL,
         workflow_id NVARCHAR(64) NOT NULL,
         title NVARCHAR(255) NOT NULL,
         description NVARCHAR(MAX) NOT NULL,
@@ -63,12 +77,14 @@ export class MssqlAdapter implements IDatabaseAdapter {
         metadata_json NVARCHAR(MAX) NOT NULL,
         created_at NVARCHAR(64) NOT NULL,
         updated_at NVARCHAR(64) NOT NULL,
+        FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
         FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE CASCADE
       );
 
       IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='activity_logs' AND xtype='U')
       CREATE TABLE activity_logs (
         id NVARCHAR(64) PRIMARY KEY,
+        session_id NVARCHAR(64),
         task_id NVARCHAR(64),
         action_type NVARCHAR(64) NOT NULL,
         details NVARCHAR(MAX) NOT NULL,
@@ -81,31 +97,172 @@ export class MssqlAdapter implements IDatabaseAdapter {
   }
 
   private async seedDefaultIfEmpty() {
-    const res = await this.pool.request().query(`SELECT count(*) as cnt FROM workflows`);
-    const count = parseInt(res.recordset[0].cnt);
-    if (count === 0) {
+    const resWf = await this.pool.request().query(`SELECT count(*) as cnt FROM workflows`);
+    let defaultWfId = 'wf-default';
+    if (resWf.recordset[0].cnt === 0) {
       const defaultStatuses: Status[] = [
         { id: 'waiting', name: 'Waiting', color: '#3b82f6', order: 1, description: 'Tasks queued awaiting AI execution' },
         { id: 'in_progress', name: 'In Progress', color: '#f59e0b', order: 2, description: 'Tasks actively being developed by AI' },
         { id: 'done', name: 'Done', color: '#10b981', order: 3, description: 'Completed and verified deliverables' },
       ];
+      const now = new Date().toISOString();
+      await this.pool.request()
+        .input('id', sql.NVarChar, defaultWfId)
+        .input('name', sql.NVarChar, 'Default Standard Workflow')
+        .input('desc', sql.NVarChar, 'Initial baseline workflow')
+        .input('statuses', sql.NVarChar, JSON.stringify(defaultStatuses))
+        .input('active', sql.Bit, 1)
+        .input('created_at', sql.NVarChar, now)
+        .query(`INSERT INTO workflows (id, name, description, statuses_json, is_active, created_at) VALUES (@id, @name, @desc, @statuses, @active, @created_at)`);
+    } else {
+      const activeRes = await this.pool.request().query(`SELECT TOP 1 id FROM workflows WHERE is_active = 1`);
+      if (activeRes.recordset.length > 0) defaultWfId = activeRes.recordset[0].id;
+    }
 
-      await this.createWorkflow(
-        'Default Standard Workflow',
-        'Initial baseline workflow with Waiting -> In Progress -> Done',
-        defaultStatuses,
-        true
-      );
+    const resSess = await this.pool.request().query(`SELECT count(*) as cnt FROM sessions`);
+    if (resSess.recordset[0].cnt === 0) {
+      const now = new Date().toISOString();
+      await this.pool.request()
+        .input('id', sql.NVarChar, 'sess-default')
+        .input('name', sql.NVarChar, 'Primary Agent Session')
+        .input('desc', sql.NVarChar, 'Default execution session')
+        .input('agent', sql.NVarChar, 'Primary-Agent')
+        .input('status', sql.NVarChar, 'active')
+        .input('wf_id', sql.NVarChar, defaultWfId)
+        .input('created_at', sql.NVarChar, now)
+        .input('updated_at', sql.NVarChar, now)
+        .query(`INSERT INTO sessions (id, name, description, agent_id, status, workflow_id, created_at, updated_at) VALUES (@id, @name, @desc, @agent, @status, @wf_id, @created_at, @updated_at)`);
     }
   }
 
-  public async getWorkflows(): Promise<Workflow[]> {
-    const res = await this.pool.request().query(`SELECT * FROM workflows ORDER BY created_at DESC`);
-    return res.recordset.map((r: any) => ({
+  // Sessions
+  public async getSessions(status?: string): Promise<Session[]> {
+    let req = this.pool.request();
+    let query = `SELECT * FROM sessions`;
+    if (status) {
+      req = req.input('status', sql.NVarChar, status);
+      query += ` WHERE status = @status`;
+    }
+    query += ` ORDER BY updated_at DESC`;
+    const res = await req.query(query);
+
+    return res.recordset.map((r) => ({
       id: r.id,
       name: r.name,
       description: r.description,
-      statuses: typeof r.statuses_json === 'string' ? JSON.parse(r.statuses_json) : r.statuses_json,
+      agent_id: r.agent_id || undefined,
+      status: r.status as Session['status'],
+      workflow_id: r.workflow_id,
+      created_at: r.created_at,
+      updated_at: r.updated_at,
+    }));
+  }
+
+  public async getSessionById(sessionId: string): Promise<Session | null> {
+    const res = await this.pool.request().input('id', sql.NVarChar, sessionId).query(`SELECT * FROM sessions WHERE id = @id`);
+    if (res.recordset.length === 0) return null;
+    const r = res.recordset[0];
+    return {
+      id: r.id,
+      name: r.name,
+      description: r.description,
+      agent_id: r.agent_id || undefined,
+      status: r.status as Session['status'],
+      workflow_id: r.workflow_id,
+      created_at: r.created_at,
+      updated_at: r.updated_at,
+    };
+  }
+
+  public async getActiveSession(): Promise<Session> {
+    let res = await this.pool.request().query(`SELECT TOP 1 * FROM sessions WHERE status = 'active' ORDER BY updated_at DESC`);
+    if (res.recordset.length === 0) {
+      res = await this.pool.request().query(`SELECT TOP 1 * FROM sessions ORDER BY updated_at DESC`);
+    }
+    if (res.recordset.length === 0) {
+      const activeWf = await this.getActiveWorkflow();
+      return this.createSession('New Agent Session', 'Autonomous session container', 'Agent-1', activeWf.id);
+    }
+    const r = res.recordset[0];
+    return {
+      id: r.id,
+      name: r.name,
+      description: r.description,
+      agent_id: r.agent_id || undefined,
+      status: r.status as Session['status'],
+      workflow_id: r.workflow_id,
+      created_at: r.created_at,
+      updated_at: r.updated_at,
+    };
+  }
+
+  public async createSession(name: string, description: string, agentId?: string, workflowId?: string): Promise<Session> {
+    const id = `sess-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const targetWf = workflowId || (await this.getActiveWorkflow()).id;
+    const now = new Date().toISOString();
+
+    await this.pool.request()
+      .input('id', sql.NVarChar, id)
+      .input('name', sql.NVarChar, name)
+      .input('desc', sql.NVarChar, description)
+      .input('agent', sql.NVarChar, agentId || null)
+      .input('status', sql.NVarChar, 'active')
+      .input('wf_id', sql.NVarChar, targetWf)
+      .input('created_at', sql.NVarChar, now)
+      .input('updated_at', sql.NVarChar, now)
+      .query(`INSERT INTO sessions (id, name, description, agent_id, status, workflow_id, created_at, updated_at) VALUES (@id, @name, @desc, @agent, @status, @wf_id, @created_at, @updated_at)`);
+
+    const session: Session = {
+      id,
+      name,
+      description,
+      agent_id: agentId,
+      status: 'active',
+      workflow_id: targetWf,
+      created_at: now,
+      updated_at: now,
+    };
+
+    await this.logActivity({
+      session_id: id,
+      action_type: 'SESSION_CREATED',
+      details: `Created new execution session "${name}"${agentId ? ` for agent [${agentId}]` : ''}`,
+    });
+
+    this.notify('SESSION_CREATED', session);
+    return session;
+  }
+
+  public async updateSessionStatus(sessionId: string, status: Session['status']): Promise<Session> {
+    const session = await this.getSessionById(sessionId);
+    if (!session) throw new Error(`Session with ID ${sessionId} not found`);
+
+    const now = new Date().toISOString();
+    await this.pool.request()
+      .input('status', sql.NVarChar, status)
+      .input('updated_at', sql.NVarChar, now)
+      .input('id', sql.NVarChar, sessionId)
+      .query(`UPDATE sessions SET status = @status, updated_at = @updated_at WHERE id = @id`);
+
+    const updatedSession: Session = { ...session, status, updated_at: now };
+    await this.logActivity({
+      session_id: sessionId,
+      action_type: 'SESSION_UPDATED',
+      details: `Updated session "${session.name}" status to [${status}]`,
+    });
+
+    this.notify('SESSION_UPDATED', updatedSession);
+    return updatedSession;
+  }
+
+  // Workflows
+  public async getWorkflows(): Promise<Workflow[]> {
+    const res = await this.pool.request().query(`SELECT * FROM workflows ORDER BY created_at DESC`);
+    return res.recordset.map((r) => ({
+      id: r.id,
+      name: r.name,
+      description: r.description,
+      statuses: JSON.parse(r.statuses_json),
       is_active: Boolean(r.is_active),
       created_at: r.created_at,
     }));
@@ -121,7 +278,7 @@ export class MssqlAdapter implements IDatabaseAdapter {
       id: r.id,
       name: r.name,
       description: r.description,
-      statuses: typeof r.statuses_json === 'string' ? JSON.parse(r.statuses_json) : r.statuses_json,
+      statuses: JSON.parse(r.statuses_json),
       is_active: Boolean(r.is_active),
       created_at: r.created_at,
     };
@@ -135,23 +292,19 @@ export class MssqlAdapter implements IDatabaseAdapter {
       await this.pool.request().query(`UPDATE workflows SET is_active = 0`);
     }
 
-    const req = this.pool.request();
-    req.input('id', sql.NVarChar, id);
-    req.input('name', sql.NVarChar, name);
-    req.input('description', sql.NVarChar, description);
-    req.input('statuses_json', sql.NVarChar, JSON.stringify(statuses));
-    req.input('is_active', sql.Bit, setActive ? 1 : 0);
-    req.input('created_at', sql.NVarChar, created_at);
-
-    await req.query(`
-      INSERT INTO workflows (id, name, description, statuses_json, is_active, created_at)
-      VALUES (@id, @name, @description, @statuses_json, @is_active, @created_at)
-    `);
+    await this.pool.request()
+      .input('id', sql.NVarChar, id)
+      .input('name', sql.NVarChar, name)
+      .input('desc', sql.NVarChar, description)
+      .input('statuses', sql.NVarChar, JSON.stringify(statuses))
+      .input('active', sql.Bit, setActive ? 1 : 0)
+      .input('created_at', sql.NVarChar, created_at)
+      .query(`INSERT INTO workflows (id, name, description, statuses_json, is_active, created_at) VALUES (@id, @name, @desc, @statuses, @active, @created_at)`);
 
     const newWf: Workflow = { id, name, description, statuses, is_active: setActive, created_at };
     await this.logActivity({
       action_type: 'WORKFLOW_CREATED',
-      details: `Generated new workflow "${name}" with ${statuses.length} status steps (${statuses.map((s) => s.name).join(' → ')})`,
+      details: `Generated new workflow "${name}" with ${statuses.length} status steps`,
     });
 
     this.notify('WORKFLOW_UPDATED', newWf);
@@ -159,17 +312,11 @@ export class MssqlAdapter implements IDatabaseAdapter {
   }
 
   public async setActiveWorkflow(workflowId: string): Promise<Workflow> {
-    const req1 = this.pool.request();
-    req1.input('id', sql.NVarChar, workflowId);
-    const res = await req1.query(`SELECT * FROM workflows WHERE id = @id`);
-    if (res.recordset.length === 0) {
-      throw new Error(`Workflow with ID ${workflowId} not found`);
-    }
+    const res = await this.pool.request().input('id', sql.NVarChar, workflowId).query(`SELECT * FROM workflows WHERE id = @id`);
+    if (res.recordset.length === 0) throw new Error(`Workflow with ID ${workflowId} not found`);
 
     await this.pool.request().query(`UPDATE workflows SET is_active = 0`);
-    const req2 = this.pool.request();
-    req2.input('id', sql.NVarChar, workflowId);
-    await req2.query(`UPDATE workflows SET is_active = 1 WHERE id = @id`);
+    await this.pool.request().input('id', sql.NVarChar, workflowId).query(`UPDATE workflows SET is_active = 1 WHERE id = @id`);
 
     const activeWf = await this.getActiveWorkflow();
     await this.logActivity({
@@ -180,40 +327,49 @@ export class MssqlAdapter implements IDatabaseAdapter {
     return activeWf;
   }
 
-  public async getTasks(workflowId?: string): Promise<Task[]> {
-    const targetWf = workflowId || (await this.getActiveWorkflow()).id;
-    const req = this.pool.request();
-    req.input('workflow_id', sql.NVarChar, targetWf);
-    const res = await req.query(`SELECT * FROM tasks WHERE workflow_id = @workflow_id ORDER BY created_at DESC`);
-    return res.recordset.map((r: any) => ({
+  // Tasks
+  public async getTasks(workflowId?: string, sessionId?: string): Promise<Task[]> {
+    let req = this.pool.request();
+    let query = `SELECT * FROM tasks`;
+    if (sessionId && sessionId !== 'all') {
+      req = req.input('session_id', sql.NVarChar, sessionId);
+      query += ` WHERE session_id = @session_id`;
+    } else if (workflowId) {
+      req = req.input('workflow_id', sql.NVarChar, workflowId);
+      query += ` WHERE workflow_id = @workflow_id`;
+    }
+    query += ` ORDER BY created_at DESC`;
+
+    const res = await req.query(query);
+    return res.recordset.map((r) => ({
       id: r.id,
+      session_id: r.session_id,
       workflow_id: r.workflow_id,
       title: r.title,
       description: r.description,
       status_id: r.status_id,
       priority: r.priority,
-      tags: typeof r.tags_json === 'string' ? JSON.parse(r.tags_json) : r.tags_json,
-      metadata: typeof r.metadata_json === 'string' ? JSON.parse(r.metadata_json) : r.metadata_json,
+      tags: JSON.parse(r.tags_json),
+      metadata: JSON.parse(r.metadata_json),
       created_at: r.created_at,
       updated_at: r.updated_at,
     }));
   }
 
   public async getTaskById(taskId: string): Promise<Task | null> {
-    const req = this.pool.request();
-    req.input('id', sql.NVarChar, taskId);
-    const res = await req.query(`SELECT * FROM tasks WHERE id = @id`);
+    const res = await this.pool.request().input('id', sql.NVarChar, taskId).query(`SELECT * FROM tasks WHERE id = @id`);
     if (res.recordset.length === 0) return null;
     const r = res.recordset[0];
     return {
       id: r.id,
+      session_id: r.session_id,
       workflow_id: r.workflow_id,
       title: r.title,
       description: r.description,
       status_id: r.status_id,
       priority: r.priority,
-      tags: typeof r.tags_json === 'string' ? JSON.parse(r.tags_json) : r.tags_json,
-      metadata: typeof r.metadata_json === 'string' ? JSON.parse(r.metadata_json) : r.metadata_json,
+      tags: JSON.parse(r.tags_json),
+      metadata: JSON.parse(r.metadata_json),
       created_at: r.created_at,
       updated_at: r.updated_at,
     };
@@ -221,7 +377,7 @@ export class MssqlAdapter implements IDatabaseAdapter {
 
   private async getNextTaskId(): Promise<string> {
     const res = await this.pool.request().query(`SELECT count(*) as total FROM tasks`);
-    const num = parseInt(res.recordset[0].total) + 101;
+    const num = (res.recordset[0].total || 0) + 101;
     return `GIRA-${num}`;
   }
 
@@ -231,36 +387,35 @@ export class MssqlAdapter implements IDatabaseAdapter {
     statusId?: string,
     priority: Task['priority'] = 'medium',
     tags: string[] = [],
-    metadata: Record<string, any> = {}
+    metadata: Record<string, any> = {},
+    sessionId?: string
   ): Promise<Task> {
+    const targetSession = sessionId ? (await this.getSessionById(sessionId)) || (await this.getActiveSession()) : await this.getActiveSession();
     const activeWf = await this.getActiveWorkflow();
     const targetStatus = statusId || activeWf.statuses[0]?.id || 'waiting';
-
     const validStatus = activeWf.statuses.find((s) => s.id === targetStatus);
     const finalStatusId = validStatus ? validStatus.id : activeWf.statuses[0].id;
 
     const id = await this.getNextTaskId();
     const now = new Date().toISOString();
 
-    const req = this.pool.request();
-    req.input('id', sql.NVarChar, id);
-    req.input('workflow_id', sql.NVarChar, activeWf.id);
-    req.input('title', sql.NVarChar, title);
-    req.input('description', sql.NVarChar, description);
-    req.input('status_id', sql.NVarChar, finalStatusId);
-    req.input('priority', sql.NVarChar, priority);
-    req.input('tags_json', sql.NVarChar, JSON.stringify(tags));
-    req.input('metadata_json', sql.NVarChar, JSON.stringify(metadata));
-    req.input('created_at', sql.NVarChar, now);
-    req.input('updated_at', sql.NVarChar, now);
-
-    await req.query(`
-      INSERT INTO tasks (id, workflow_id, title, description, status_id, priority, tags_json, metadata_json, created_at, updated_at)
-      VALUES (@id, @workflow_id, @title, @description, @status_id, @priority, @tags_json, @metadata_json, @created_at, @updated_at)
-    `);
+    await this.pool.request()
+      .input('id', sql.NVarChar, id)
+      .input('session_id', sql.NVarChar, targetSession.id)
+      .input('wf_id', sql.NVarChar, activeWf.id)
+      .input('title', sql.NVarChar, title)
+      .input('desc', sql.NVarChar, description)
+      .input('status_id', sql.NVarChar, finalStatusId)
+      .input('priority', sql.NVarChar, priority)
+      .input('tags', sql.NVarChar, JSON.stringify(tags))
+      .input('meta', sql.NVarChar, JSON.stringify(metadata))
+      .input('created_at', sql.NVarChar, now)
+      .input('updated_at', sql.NVarChar, now)
+      .query(`INSERT INTO tasks (id, session_id, workflow_id, title, description, status_id, priority, tags_json, metadata_json, created_at, updated_at) VALUES (@id, @session_id, @wf_id, @title, @desc, @status_id, @priority, @tags, @meta, @created_at, @updated_at)`);
 
     const newTask: Task = {
       id,
+      session_id: targetSession.id,
       workflow_id: activeWf.id,
       title,
       description,
@@ -272,12 +427,12 @@ export class MssqlAdapter implements IDatabaseAdapter {
       updated_at: now,
     };
 
-    const statusName = validStatus ? validStatus.name : finalStatusId;
     await this.logActivity({
+      session_id: targetSession.id,
       task_id: id,
       action_type: 'TASK_CREATED',
       to_status: finalStatusId,
-      details: `Added task [${id}] "${title}" to column [${statusName}]`,
+      details: `Added task [${id}] "${title}"`,
     });
 
     this.notify('TASK_UPDATED', newTask);
@@ -285,11 +440,13 @@ export class MssqlAdapter implements IDatabaseAdapter {
   }
 
   public async batchCreateTasks(
-    tasksInput: Array<{ title: string; description: string; status_id?: string; priority?: Task['priority']; tags?: string[] }>
+    tasksInput: Array<{ title: string; description: string; status_id?: string; priority?: Task['priority']; tags?: string[]; session_id?: string }>,
+    sessionId?: string
   ): Promise<Task[]> {
     const createdTasks: Task[] = [];
     for (const t of tasksInput) {
-      const created = await this.createTask(t.title, t.description, t.status_id, t.priority || 'medium', t.tags || []);
+      const targetSessId = t.session_id || sessionId;
+      const created = await this.createTask(t.title, t.description, t.status_id, t.priority || 'medium', t.tags || [], {}, targetSessId);
       createdTasks.push(created);
     }
     return createdTasks;
@@ -297,39 +454,24 @@ export class MssqlAdapter implements IDatabaseAdapter {
 
   public async moveTask(taskId: string, newStatusId: string, reason?: string): Promise<Task> {
     const task = await this.getTaskById(taskId);
-    if (!task) {
-      throw new Error(`Task with ID ${taskId} not found`);
-    }
-
-    const activeWf = await this.getActiveWorkflow();
-    const statusDef = activeWf.statuses.find((s) => s.id === newStatusId);
-    if (!statusDef) {
-      throw new Error(`Status ${newStatusId} does not exist in active workflow ${activeWf.name}`);
-    }
-
-    const oldStatusId = task.status_id;
-    const oldStatusDef = activeWf.statuses.find((s) => s.id === oldStatusId);
+    if (!task) throw new Error(`Task with ID ${taskId} not found`);
 
     const now = new Date().toISOString();
-    const req = this.pool.request();
-    req.input('status_id', sql.NVarChar, newStatusId);
-    req.input('updated_at', sql.NVarChar, now);
-    req.input('id', sql.NVarChar, taskId);
-    await req.query(`UPDATE tasks SET status_id = @status_id, updated_at = @updated_at WHERE id = @id`);
+    await this.pool.request()
+      .input('status_id', sql.NVarChar, newStatusId)
+      .input('updated_at', sql.NVarChar, now)
+      .input('id', sql.NVarChar, taskId)
+      .query(`UPDATE tasks SET status_id = @status_id, updated_at = @updated_at WHERE id = @id`);
 
     const updatedTask = { ...task, status_id: newStatusId, updated_at: now };
-
-    const fromName = oldStatusDef ? oldStatusDef.name : oldStatusId;
-    const toName = statusDef.name;
-    const logDetails = `AI moved [${taskId}] "${task.title}" from [${fromName}] → [${toName}]${reason ? `. Rationale: ${reason}` : ''}`;
-
     await this.logActivity({
+      session_id: task.session_id,
       task_id: taskId,
       action_type: 'TASK_MOVED',
-      from_status: oldStatusId,
+      from_status: task.status_id,
       to_status: newStatusId,
       reason,
-      details: logDetails,
+      details: `AI moved [${taskId}] "${task.title}" → [${newStatusId}]`,
     });
 
     this.notify('TASK_MOVED', updatedTask);
@@ -341,9 +483,7 @@ export class MssqlAdapter implements IDatabaseAdapter {
     updates: Partial<Pick<Task, 'title' | 'description' | 'priority' | 'tags' | 'metadata'>>
   ): Promise<Task> {
     const task = await this.getTaskById(taskId);
-    if (!task) {
-      throw new Error(`Task with ID ${taskId} not found`);
-    }
+    if (!task) throw new Error(`Task with ID ${taskId} not found`);
 
     const newTitle = updates.title ?? task.title;
     const newDesc = updates.description ?? task.description;
@@ -352,23 +492,19 @@ export class MssqlAdapter implements IDatabaseAdapter {
     const newMeta = updates.metadata ?? task.metadata;
     const now = new Date().toISOString();
 
-    const req = this.pool.request();
-    req.input('title', sql.NVarChar, newTitle);
-    req.input('description', sql.NVarChar, newDesc);
-    req.input('priority', sql.NVarChar, newPriority);
-    req.input('tags_json', sql.NVarChar, JSON.stringify(newTags));
-    req.input('metadata_json', sql.NVarChar, JSON.stringify(newMeta));
-    req.input('updated_at', sql.NVarChar, now);
-    req.input('id', sql.NVarChar, taskId);
-
-    await req.query(`
-      UPDATE tasks
-      SET title = @title, description = @description, priority = @priority, tags_json = @tags_json, metadata_json = @metadata_json, updated_at = @updated_at
-      WHERE id = @id
-    `);
+    await this.pool.request()
+      .input('title', sql.NVarChar, newTitle)
+      .input('desc', sql.NVarChar, newDesc)
+      .input('priority', sql.NVarChar, newPriority)
+      .input('tags', sql.NVarChar, JSON.stringify(newTags))
+      .input('meta', sql.NVarChar, JSON.stringify(newMeta))
+      .input('updated_at', sql.NVarChar, now)
+      .input('id', sql.NVarChar, taskId)
+      .query(`UPDATE tasks SET title = @title, description = @desc, priority = @priority, tags_json = @tags, metadata_json = @meta, updated_at = @updated_at WHERE id = @id`);
 
     const updated = (await this.getTaskById(taskId))!;
     await this.logActivity({
+      session_id: task.session_id,
       task_id: taskId,
       action_type: 'TASK_UPDATED',
       details: `AI updated details for [${taskId}] "${updated.title}"`,
@@ -378,35 +514,40 @@ export class MssqlAdapter implements IDatabaseAdapter {
     return updated;
   }
 
+  // Activity logs
   public async logActivity(log: Omit<ActivityLog, 'id' | 'timestamp'>): Promise<void> {
     const id = `log-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const timestamp = new Date().toISOString();
 
-    const req = this.pool.request();
-    req.input('id', sql.NVarChar, id);
-    req.input('task_id', sql.NVarChar, log.task_id || null);
-    req.input('action_type', sql.NVarChar, log.action_type);
-    req.input('details', sql.NVarChar, log.details);
-    req.input('from_status', sql.NVarChar, log.from_status || null);
-    req.input('to_status', sql.NVarChar, log.to_status || null);
-    req.input('reason', sql.NVarChar, log.reason || null);
-    req.input('timestamp', sql.NVarChar, timestamp);
-
-    await req.query(`
-      INSERT INTO activity_logs (id, task_id, action_type, details, from_status, to_status, reason, timestamp)
-      VALUES (@id, @task_id, @action_type, @details, @from_status, @to_status, @reason, @timestamp)
-    `);
+    await this.pool.request()
+      .input('id', sql.NVarChar, id)
+      .input('session_id', sql.NVarChar, log.session_id || null)
+      .input('task_id', sql.NVarChar, log.task_id || null)
+      .input('action', sql.NVarChar, log.action_type)
+      .input('details', sql.NVarChar, log.details)
+      .input('from', sql.NVarChar, log.from_status || null)
+      .input('to', sql.NVarChar, log.to_status || null)
+      .input('reason', sql.NVarChar, log.reason || null)
+      .input('timestamp', sql.NVarChar, timestamp)
+      .query(`INSERT INTO activity_logs (id, session_id, task_id, action_type, details, from_status, to_status, reason, timestamp) VALUES (@id, @session_id, @task_id, @action, @details, @from, @to, @reason, @timestamp)`);
 
     const fullLog: ActivityLog = { id, timestamp, ...log };
     this.notify('LOG_ADDED', fullLog);
   }
 
-  public async getActivityLogs(limit = 50): Promise<ActivityLog[]> {
-    const req = this.pool.request();
-    req.input('limit', sql.Int, limit);
-    const res = await req.query(`SELECT TOP (@limit) * FROM activity_logs ORDER BY timestamp DESC`);
-    return res.recordset.map((r: any) => ({
+  public async getActivityLogs(limit = 50, sessionId?: string): Promise<ActivityLog[]> {
+    let req = this.pool.request().input('limit', sql.Int, limit);
+    let query = `SELECT TOP (@limit) * FROM activity_logs`;
+    if (sessionId && sessionId !== 'all') {
+      req = req.input('session_id', sql.NVarChar, sessionId);
+      query += ` WHERE session_id = @session_id`;
+    }
+    query += ` ORDER BY timestamp DESC`;
+
+    const res = await req.query(query);
+    return res.recordset.map((r) => ({
       id: r.id,
+      session_id: r.session_id || undefined,
       task_id: r.task_id || undefined,
       action_type: r.action_type,
       details: r.details,

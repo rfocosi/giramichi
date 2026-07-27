@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Workflow, Task, ActivityLog, Status } from '../db/db.js';
+import { Workflow, Task, ActivityLog, Session } from '../db/db.js';
 import { WorkflowHeader } from './components/WorkflowHeader.js';
 import { KanbanBoard } from './components/KanbanBoard.js';
 import { ActivityLogStream } from './components/ActivityLogStream.js';
@@ -10,19 +10,38 @@ export const App: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [workflowsList, setWorkflowsList] = useState<Array<{ id: string; name: string }>>([]);
+  const [sessionsList, setSessionsList] = useState<Session[]>([]);
+  const [selectedSessionId, setSelectedSessionId] = useState<string>('all');
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isSimulating, setIsSimulating] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // Fetch initial board state
-  const fetchBoard = async () => {
+  // Fetch sessions list
+  const fetchSessions = async () => {
     try {
-      const res = await fetch('/api/board');
+      const res = await fetch('/api/sessions');
+      const data = await res.json();
+      if (data.success) {
+        setSessionsList(data.sessions);
+      }
+    } catch (err) {
+      console.error('Error fetching sessions:', err);
+    }
+  };
+
+  // Fetch initial board state for selected session
+  const fetchBoard = async (sessId = selectedSessionId) => {
+    try {
+      const url = sessId && sessId !== 'all' ? `/api/board?session_id=${encodeURIComponent(sessId)}` : '/api/board?session_id=all';
+      const res = await fetch(url);
       const data = await res.json();
       if (data.success) {
         setWorkflow(data.workflow);
         setTasks(data.tasks);
         setLogs(data.logs);
+        if (data.sessions) {
+          setSessionsList(data.sessions);
+        }
       }
     } catch (err) {
       console.error('Error fetching board state:', err);
@@ -45,7 +64,8 @@ export const App: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchBoard();
+    fetchBoard(selectedSessionId);
+    fetchSessions();
     fetchWorkflowsList();
 
     // Subscribe to SSE stream for real-time live sync
@@ -55,7 +75,8 @@ export const App: React.FC = () => {
       try {
         const payload = JSON.parse(event.data);
         console.log('[SSE Event Received]', payload);
-        fetchBoard();
+        fetchBoard(selectedSessionId);
+        fetchSessions();
         fetchWorkflowsList();
       } catch (err) {
         console.error('Failed to parse SSE payload:', err);
@@ -65,7 +86,7 @@ export const App: React.FC = () => {
     return () => {
       eventSource.close();
     };
-  }, []);
+  }, [selectedSessionId]);
 
   const handleSelectWorkflow = async (workflowId: string) => {
     try {
@@ -79,119 +100,135 @@ export const App: React.FC = () => {
       });
       const data = await res.json();
       if (data.success) {
-        fetchBoard();
+        fetchBoard(selectedSessionId);
       }
     } catch (err) {
       console.error('Failed to switch workflow:', err);
     }
   };
 
-  // Run a complete AI workflow simulation demonstration over MCP
+  const handleSelectSession = (sessionId: string) => {
+    setSelectedSessionId(sessionId);
+    fetchBoard(sessionId);
+  };
+
+  // Run a multi-agent simulation demo over MCP
   const handleTriggerSim = async () => {
     setIsSimulating(true);
     try {
-      // Step 1: AI generates custom workflow
-      await fetch('/api/mcp-direct', {
+      // Step 1: Agent 1 creates Session A ("Payment Service Agent")
+      const sessARes = await fetch('/api/mcp-direct', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: 'giramichi_create_workflow',
+          name: 'giramichi_create_session',
           args: {
-            name: 'Brilliant AI Full-Stack Workflow',
-            description: 'AI-designed workflow featuring Waiting -> In Progress -> Code Review -> Done',
-            statuses: [
-              { id: 'waiting', name: 'Waiting', color: '#3b82f6', order: 1, description: 'Queued for AI execution' },
-              { id: 'in_progress', name: 'In Progress', color: '#f59e0b', order: 2, description: 'AI agent working on feature implementation' },
-              { id: 'code_review', name: 'Code Review', color: '#8b5cf6', order: 3, description: 'Automated verification & static analysis' },
-              { id: 'done', name: 'Done', color: '#10b981', order: 4, description: 'Successfully verified & merged deliverable' },
-            ],
+            name: 'Payment Gateway Integration',
+            description: 'Agent handling Stripe & PayPal payment processing microservice',
+            agent_id: 'Claude-3.5-Sonnet',
           },
         }),
       });
+      const sessAData = await sessARes.json();
+      const sessionA: Session = JSON.parse(sessAData.result.content[0].text).session;
+
+      // Step 2: Agent 2 creates Session B ("Analytics Agent")
+      const sessBRes = await fetch('/api/mcp-direct', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'giramichi_create_session',
+          args: {
+            name: 'Realtime Analytics Engine',
+            description: 'Agent handling telemetry aggregation and SSE metrics pipeline',
+            agent_id: 'Antigravity-Agent-2',
+          },
+        }),
+      });
+      const sessBData = await sessBRes.json();
+      const sessionB: Session = JSON.parse(sessBData.result.content[0].text).session;
 
       await new Promise((r) => setTimeout(r, 800));
 
-      // Step 2: AI batch creates initial tasks
-      const batchRes = await fetch('/api/mcp-direct', {
+      // Step 3: Agent 1 adds tasks to Session A
+      const batchARes = await fetch('/api/mcp-direct', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: 'giramichi_batch_create_tasks',
           args: {
+            session_id: sessionA.id,
             tasks: [
               {
-                title: 'Implement Database Connection Pool & Schema Migration',
-                description: 'Set up SQLite WAL mode database tables for workflows, tasks, and activity logs.',
-                status_id: 'waiting',
-                priority: 'high',
-                tags: ['database', 'backend', 'core'],
-              },
-              {
-                title: 'Expose MCP Stdio & SSE Event Server Interface',
-                description: 'Configure @modelcontextprotocol/sdk stdio transport and Express Server-Sent Events endpoint.',
+                title: 'Stripe Webhook Handler & Idempotency Store',
+                description: 'Implement signature verification and DB transaction lock for payment events.',
                 status_id: 'waiting',
                 priority: 'urgent',
-                tags: ['mcp', 'api', 'realtime'],
+                tags: ['payment', 'stripe', 'backend'],
               },
               {
-                title: 'Build Read-Only Modern Kanban Board UI',
-                description: 'Construct Vite + React dark mode UI with glassmorphism aesthetics and live SSE listeners.',
+                title: 'PayPal Checkout Flow API Integration',
+                description: 'Set up v2 checkout order creation and capture endpoints.',
                 status_id: 'waiting',
-                priority: 'medium',
-                tags: ['frontend', 'react', 'ui'],
+                priority: 'high',
+                tags: ['payment', 'paypal', 'api'],
               },
             ],
           },
         }),
       });
-      const batchData = await batchRes.json();
-      const createdTasks: Task[] = JSON.parse(batchData.result.content[0].text).tasks;
+      const batchAData = await batchARes.json();
+      const tasksA: Task[] = JSON.parse(batchAData.result.content[0].text).tasks;
+
+      // Step 4: Agent 2 adds tasks to Session B
+      await fetch('/api/mcp-direct', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'giramichi_batch_create_tasks',
+          args: {
+            session_id: sessionB.id,
+            tasks: [
+              {
+                title: 'ClickHouse Event Streaming Pipeline',
+                description: 'Configure real-time log ingestion for system metrics.',
+                status_id: 'waiting',
+                priority: 'medium',
+                tags: ['analytics', 'streaming', 'data'],
+              },
+            ],
+          },
+        }),
+      });
 
       await new Promise((r) => setTimeout(r, 1000));
 
-      // Step 3: AI moves first task from Waiting -> In Progress
-      if (createdTasks.length > 0) {
+      // Step 5: Agent 1 moves Stripe Task in Session A to In Progress -> Done
+      if (tasksA.length > 0) {
         await fetch('/api/mcp-direct', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             name: 'giramichi_move_task',
             args: {
-              task_id: createdTasks[0].id,
+              task_id: tasksA[0].id,
               new_status_id: 'in_progress',
-              reason: 'AI agent started database schema initialization and connection pooling setup.',
+              reason: 'Agent started implementing Stripe Webhook HMAC verification.',
             },
           }),
         });
 
         await new Promise((r) => setTimeout(r, 1200));
 
-        // Step 4: AI moves task to Code Review
         await fetch('/api/mcp-direct', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             name: 'giramichi_move_task',
             args: {
-              task_id: createdTasks[0].id,
-              new_status_id: 'code_review',
-              reason: 'Database tables initialized. Running unit tests and verification suite.',
-            },
-          }),
-        });
-
-        await new Promise((r) => setTimeout(r, 1200));
-
-        // Step 5: AI marks task Done
-        await fetch('/api/mcp-direct', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: 'giramichi_move_task',
-            args: {
-              task_id: createdTasks[0].id,
+              task_id: tasksA[0].id,
               new_status_id: 'done',
-              reason: 'All database constraints and CRUD operations verified successfully.',
+              reason: 'Stripe webhook signature verified and unit tests passing.',
             },
           }),
         });
@@ -200,7 +237,8 @@ export const App: React.FC = () => {
       console.error('Simulation error:', err);
     } finally {
       setIsSimulating(false);
-      fetchBoard();
+      fetchBoard(selectedSessionId);
+      fetchSessions();
       fetchWorkflowsList();
     }
   };
@@ -210,7 +248,7 @@ export const App: React.FC = () => {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: 'var(--accent-indigo)' }}>
         <div style={{ textAlign: 'center' }}>
           <h2>Loading Giramichi 煌道...</h2>
-          <p style={{ color: 'var(--text-muted)', marginTop: '8px' }}>Initializing AI-Guided Dashboard System</p>
+          <p style={{ color: 'var(--text-muted)', marginTop: '8px' }}>Initializing Multi-Agent Sessions Engine</p>
         </div>
       </div>
     );
@@ -225,6 +263,9 @@ export const App: React.FC = () => {
         workflowsList={workflowsList}
         activeWorkflowId={workflow.id}
         onSelectWorkflow={handleSelectWorkflow}
+        sessionsList={sessionsList}
+        selectedSessionId={selectedSessionId}
+        onSelectSession={handleSelectSession}
         onTriggerSim={handleTriggerSim}
         isSimulating={isSimulating}
       />

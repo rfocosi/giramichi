@@ -2,6 +2,53 @@ import { db } from '../db/index.js';
 
 export const toolDefinitions = [
   {
+    name: 'giramichi_create_session',
+    description: 'Creates a top-level agent execution session for organizing tasks and activities when multiple AI agents work on the same server.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Name of the agent session, e.g. "Payment Gateway Refactor"' },
+        description: { type: 'string', description: 'Detailed objective of this agent session' },
+        agent_id: { type: 'string', description: 'Identifier of the agent, e.g., "Claude-3.5", "Antigravity-Agent-1", "Cursor"' },
+        workflow_id: { type: 'string', description: 'Optional workflow ID to link to this session' },
+      },
+      required: ['name', 'description'],
+    },
+  },
+  {
+    name: 'giramichi_list_sessions',
+    description: 'Lists active, completed, or archived agent sessions.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', enum: ['active', 'completed', 'archived'], description: 'Filter sessions by status' },
+      },
+    },
+  },
+  {
+    name: 'giramichi_get_session',
+    description: 'Retrieves details, task breakdown, and recent logs for a specific session.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        session_id: { type: 'string', description: 'Session ID (e.g. "sess-1722110000000-a1b2c")' },
+      },
+      required: ['session_id'],
+    },
+  },
+  {
+    name: 'giramichi_close_session',
+    description: 'Updates session status to "completed" or "archived".',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        session_id: { type: 'string', description: 'Session ID' },
+        status: { type: 'string', enum: ['completed', 'archived'], description: 'New status for the session' },
+      },
+      required: ['session_id', 'status'],
+    },
+  },
+  {
     name: 'giramichi_create_workflow',
     description: 'Generates a new project development workflow lifecycle with custom status steps (e.g. Waiting -> In Progress -> Done). Sets it as active.',
     inputSchema: {
@@ -41,7 +88,7 @@ export const toolDefinitions = [
   },
   {
     name: 'giramichi_create_task',
-    description: 'Creates a new task card on the Giramichi board under a designated workflow status.',
+    description: 'Creates a new task card on the Giramichi board under a designated workflow status and session.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -50,6 +97,7 @@ export const toolDefinitions = [
         status_id: { type: 'string', description: 'Target status column ID (defaults to first status in active workflow if omitted)' },
         priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'], description: 'Task priority level' },
         tags: { type: 'array', items: { type: 'string' }, description: 'Tags/labels for the task (e.g. ["frontend", "api", "auth"])' },
+        session_id: { type: 'string', description: 'Optional session ID for multi-agent grouping (defaults to active session if omitted)' },
       },
       required: ['title', 'description'],
     },
@@ -60,6 +108,7 @@ export const toolDefinitions = [
     inputSchema: {
       type: 'object',
       properties: {
+        session_id: { type: 'string', description: 'Target session ID for all batch tasks' },
         tasks: {
           type: 'array',
           items: {
@@ -70,6 +119,7 @@ export const toolDefinitions = [
               status_id: { type: 'string' },
               priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'] },
               tags: { type: 'array', items: { type: 'string' } },
+              session_id: { type: 'string' },
             },
             required: ['title', 'description'],
           },
@@ -108,10 +158,12 @@ export const toolDefinitions = [
   },
   {
     name: 'giramichi_get_board',
-    description: 'Fetches the current Giramichi board state including active workflow, status columns, and all tasks.',
+    description: 'Fetches the current Giramichi board state including sessions, active workflow, status columns, and tasks.',
     inputSchema: {
       type: 'object',
-      properties: {},
+      properties: {
+        session_id: { type: 'string', description: 'Optional session ID to filter board view (pass "all" for all sessions)' },
+      },
     },
   },
   {
@@ -121,6 +173,7 @@ export const toolDefinitions = [
       type: 'object',
       properties: {
         limit: { type: 'number', description: 'Number of recent log entries to retrieve (default 50)' },
+        session_id: { type: 'string', description: 'Optional session ID filter' },
       },
     },
   },
@@ -129,6 +182,59 @@ export const toolDefinitions = [
 export async function handleToolCall(name: string, args: any) {
   try {
     switch (name) {
+      case 'giramichi_create_session': {
+        const session = await db.createSession(args.name, args.description, args.agent_id, args.workflow_id);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({ success: true, message: `Session "${session.name}" created [ID: ${session.id}].`, session }, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'giramichi_list_sessions': {
+        const sessions = await db.getSessions(args.status);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({ success: true, count: sessions.length, sessions }, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'giramichi_get_session': {
+        const session = await db.getSessionById(args.session_id);
+        if (!session) {
+          throw new Error(`Session ${args.session_id} not found`);
+        }
+        const tasks = await db.getTasks(undefined, args.session_id);
+        const logs = await db.getActivityLogs(20, args.session_id);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({ success: true, session, total_tasks: tasks.length, tasks, recent_logs: logs }, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'giramichi_close_session': {
+        const session = await db.updateSessionStatus(args.session_id, args.status);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({ success: true, message: `Session [${session.id}] status updated to ${args.status}.`, session }, null, 2),
+            },
+          ],
+        };
+      }
+
       case 'giramichi_create_workflow': {
         const wf = await db.createWorkflow(args.name, args.description, args.statuses, true);
         return {
@@ -154,19 +260,19 @@ export async function handleToolCall(name: string, args: any) {
       }
 
       case 'giramichi_create_task': {
-        const task = await db.createTask(args.title, args.description, args.status_id, args.priority, args.tags);
+        const task = await db.createTask(args.title, args.description, args.status_id, args.priority, args.tags, {}, args.session_id);
         return {
           content: [
             {
               type: 'text',
-              text: JSON.stringify({ success: true, message: `Task [${task.id}] created under status [${task.status_id}].`, task }, null, 2),
+              text: JSON.stringify({ success: true, message: `Task [${task.id}] created in session [${task.session_id}] under status [${task.status_id}].`, task }, null, 2),
             },
           ],
         };
       }
 
       case 'giramichi_batch_create_tasks': {
-        const created = await db.batchCreateTasks(args.tasks);
+        const created = await db.batchCreateTasks(args.tasks, args.session_id);
         return {
           content: [
             {
@@ -207,21 +313,24 @@ export async function handleToolCall(name: string, args: any) {
       }
 
       case 'giramichi_get_board': {
+        const activeSession = await db.getActiveSession();
+        const targetSessionId = args.session_id || activeSession.id;
         const workflow = await db.getActiveWorkflow();
-        const tasks = await db.getTasks(workflow.id);
-        const logs = await db.getActivityLogs(10);
+        const tasks = await db.getTasks(workflow.id, targetSessionId);
+        const logs = await db.getActivityLogs(20, targetSessionId);
+        const sessions = await db.getSessions();
         return {
           content: [
             {
               type: 'text',
-              text: JSON.stringify({ workflow, total_tasks: tasks.length, tasks, recent_logs: logs }, null, 2),
+              text: JSON.stringify({ workflow, active_session_id: targetSessionId, sessions, total_tasks: tasks.length, tasks, recent_logs: logs }, null, 2),
             },
           ],
         };
       }
 
       case 'giramichi_get_activity_log': {
-        const logs = await db.getActivityLogs(args.limit || 50);
+        const logs = await db.getActivityLogs(args.limit || 50, args.session_id);
         return {
           content: [
             {
