@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "server": "tsx src/server/index.ts",
     "mcp": "tsx src/mcp/mcpServer.ts",
+    "mcp:http": "tsx src/mcp/httpMcpServer.ts",
     "demo": "tsx scripts/demo_ai_simulation.ts"
   },
   "dependencies": {
