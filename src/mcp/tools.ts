@@ -27,7 +27,7 @@ export const toolDefinitions = [
   },
   {
     name: 'giramichi_get_session',
-    description: 'Retrieves details, task breakdown, and recent logs for a specific session.',
+    description: 'Retrieves details, task execution breakdown, next task to implement, and recent logs for a specific session.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -88,7 +88,7 @@ export const toolDefinitions = [
   },
   {
     name: 'giramichi_create_task',
-    description: 'Creates a new task card on the Giramichi board under a designated workflow status and session.',
+    description: 'Creates a new task card on the Giramichi board under a designated workflow status, session, and decimal execution order.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -96,6 +96,7 @@ export const toolDefinitions = [
         description: { type: 'string', description: 'Detailed technical description and acceptance criteria' },
         status_id: { type: 'string', description: 'Target status column ID (defaults to first status in active workflow if omitted)' },
         priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'], description: 'Task priority level' },
+        order: { type: 'number', description: 'Execution sequence order (e.g. 1.0, 1.1, 1.5, 2.0). Tasks execute in ascending order.' },
         tags: { type: 'array', items: { type: 'string' }, description: 'Tags/labels for the task (e.g. ["frontend", "api", "auth"])' },
         session_id: { type: 'string', description: 'Optional session ID for multi-agent grouping (defaults to active session if omitted)' },
       },
@@ -104,7 +105,7 @@ export const toolDefinitions = [
   },
   {
     name: 'giramichi_batch_create_tasks',
-    description: 'Batch adds multiple tasks to the board in a single operation during initial AI planning.',
+    description: 'Batch adds multiple tasks to the board with sequential or custom decimal order indexes.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -118,6 +119,7 @@ export const toolDefinitions = [
               description: { type: 'string' },
               status_id: { type: 'string' },
               priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'] },
+              order: { type: 'number', description: 'Decimal order position (e.g. 1.0, 1.5, 2.0)' },
               tags: { type: 'array', items: { type: 'string' } },
               session_id: { type: 'string' },
             },
@@ -143,7 +145,7 @@ export const toolDefinitions = [
   },
   {
     name: 'giramichi_update_task',
-    description: 'Updates task title, description, priority, or tags.',
+    description: 'Updates task title, description, priority, order position, or tags.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -151,6 +153,7 @@ export const toolDefinitions = [
         title: { type: 'string' },
         description: { type: 'string' },
         priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'] },
+        order: { type: 'number', description: 'New execution sequence order (e.g. 1.5 to insert between 1.0 and 2.0)' },
         tags: { type: 'array', items: { type: 'string' } },
       },
       required: ['task_id'],
@@ -158,7 +161,7 @@ export const toolDefinitions = [
   },
   {
     name: 'giramichi_get_board',
-    description: 'Fetches the current Giramichi board state including sessions, active workflow, status columns, and tasks.',
+    description: 'Fetches the current Giramichi board state including sessions, active workflow, tasks ordered by execution sequence, and next task to implement.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -178,6 +181,13 @@ export const toolDefinitions = [
     },
   },
 ];
+
+function findNextTaskToImplement(tasks: any[]) {
+  const pending = tasks.filter((t) => t.status_id !== 'done' && t.status_id !== 'completed');
+  if (pending.length === 0) return null;
+  pending.sort((a, b) => a.order - b.order);
+  return pending[0];
+}
 
 export async function handleToolCall(name: string, args: any) {
   try {
@@ -213,11 +223,12 @@ export async function handleToolCall(name: string, args: any) {
         }
         const tasks = await db.getTasks(undefined, args.session_id);
         const logs = await db.getActivityLogs(20, args.session_id);
+        const nextTask = findNextTaskToImplement(tasks);
         return {
           content: [
             {
               type: 'text',
-              text: JSON.stringify({ success: true, session, total_tasks: tasks.length, tasks, recent_logs: logs }, null, 2),
+              text: JSON.stringify({ success: true, session, total_tasks: tasks.length, next_task_to_implement: nextTask, tasks, recent_logs: logs }, null, 2),
             },
           ],
         };
@@ -260,12 +271,12 @@ export async function handleToolCall(name: string, args: any) {
       }
 
       case 'giramichi_create_task': {
-        const task = await db.createTask(args.title, args.description, args.status_id, args.priority, args.tags, {}, args.session_id);
+        const task = await db.createTask(args.title, args.description, args.status_id, args.priority, args.tags, {}, args.session_id, args.order);
         return {
           content: [
             {
               type: 'text',
-              text: JSON.stringify({ success: true, message: `Task [${task.id}] created in session [${task.session_id}] under status [${task.status_id}].`, task }, null, 2),
+              text: JSON.stringify({ success: true, message: `Task [${task.id}] created in session [${task.session_id}] with order [${task.order}] under status [${task.status_id}].`, task }, null, 2),
             },
           ],
         };
@@ -300,13 +311,14 @@ export async function handleToolCall(name: string, args: any) {
           title: args.title,
           description: args.description,
           priority: args.priority,
+          order: args.order,
           tags: args.tags,
         });
         return {
           content: [
             {
               type: 'text',
-              text: JSON.stringify({ success: true, message: `Task [${task.id}] updated.`, task }, null, 2),
+              text: JSON.stringify({ success: true, message: `Task [${task.id}] updated (order: ${task.order}).`, task }, null, 2),
             },
           ],
         };
@@ -319,11 +331,12 @@ export async function handleToolCall(name: string, args: any) {
         const tasks = await db.getTasks(workflow.id, targetSessionId);
         const logs = await db.getActivityLogs(20, targetSessionId);
         const sessions = await db.getSessions();
+        const nextTask = findNextTaskToImplement(tasks);
         return {
           content: [
             {
               type: 'text',
-              text: JSON.stringify({ workflow, active_session_id: targetSessionId, sessions, total_tasks: tasks.length, tasks, recent_logs: logs }, null, 2),
+              text: JSON.stringify({ workflow, active_session_id: targetSessionId, sessions, total_tasks: tasks.length, next_task_to_implement: nextTask, tasks, recent_logs: logs }, null, 2),
             },
           ],
         };

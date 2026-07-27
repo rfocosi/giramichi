@@ -73,6 +73,7 @@ export class MssqlAdapter implements IDatabaseAdapter {
         description NVARCHAR(MAX) NOT NULL,
         status_id NVARCHAR(64) NOT NULL,
         priority NVARCHAR(32) NOT NULL DEFAULT 'medium',
+        [order] FLOAT NOT NULL DEFAULT 1.0,
         tags_json NVARCHAR(MAX) NOT NULL,
         metadata_json NVARCHAR(MAX) NOT NULL,
         created_at NVARCHAR(64) NOT NULL,
@@ -94,6 +95,27 @@ export class MssqlAdapter implements IDatabaseAdapter {
         timestamp NVARCHAR(64) NOT NULL
       );
     `);
+
+    try {
+      await this.pool.request().query(`
+        IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('tasks') AND name = 'session_id')
+        ALTER TABLE tasks ADD session_id NVARCHAR(64) NOT NULL DEFAULT 'sess-default';
+      `);
+    } catch (_) {}
+
+    try {
+      await this.pool.request().query(`
+        IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('tasks') AND name = 'order')
+        ALTER TABLE tasks ADD [order] FLOAT NOT NULL DEFAULT 1.0;
+      `);
+    } catch (_) {}
+
+    try {
+      await this.pool.request().query(`
+        IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('activity_logs') AND name = 'session_id')
+        ALTER TABLE activity_logs ADD session_id NVARCHAR(64);
+      `);
+    } catch (_) {}
   }
 
   private async seedDefaultIfEmpty() {
@@ -338,7 +360,7 @@ export class MssqlAdapter implements IDatabaseAdapter {
       req = req.input('workflow_id', sql.NVarChar, workflowId);
       query += ` WHERE workflow_id = @workflow_id`;
     }
-    query += ` ORDER BY created_at DESC`;
+    query += ` ORDER BY [order] ASC, created_at ASC`;
 
     const res = await req.query(query);
     return res.recordset.map((r) => ({
@@ -349,6 +371,7 @@ export class MssqlAdapter implements IDatabaseAdapter {
       description: r.description,
       status_id: r.status_id,
       priority: r.priority,
+      order: r.order !== undefined && r.order !== null ? Number(r.order) : 1.0,
       tags: JSON.parse(r.tags_json),
       metadata: JSON.parse(r.metadata_json),
       created_at: r.created_at,
@@ -368,6 +391,7 @@ export class MssqlAdapter implements IDatabaseAdapter {
       description: r.description,
       status_id: r.status_id,
       priority: r.priority,
+      order: r.order !== undefined && r.order !== null ? Number(r.order) : 1.0,
       tags: JSON.parse(r.tags_json),
       metadata: JSON.parse(r.metadata_json),
       created_at: r.created_at,
@@ -381,6 +405,12 @@ export class MssqlAdapter implements IDatabaseAdapter {
     return `GIRA-${num}`;
   }
 
+  private async getNextTaskOrder(sessionId: string): Promise<number> {
+    const res = await this.pool.request().input('session_id', sql.NVarChar, sessionId).query(`SELECT MAX([order]) as max_order FROM tasks WHERE session_id = @session_id`);
+    const maxVal = res.recordset[0] && res.recordset[0].max_order !== null && res.recordset[0].max_order !== undefined ? Number(res.recordset[0].max_order) : 0.0;
+    return Math.round((maxVal + 1.0) * 100) / 100;
+  }
+
   public async createTask(
     title: string,
     description: string,
@@ -388,13 +418,15 @@ export class MssqlAdapter implements IDatabaseAdapter {
     priority: Task['priority'] = 'medium',
     tags: string[] = [],
     metadata: Record<string, any> = {},
-    sessionId?: string
+    sessionId?: string,
+    order?: number
   ): Promise<Task> {
     const targetSession = sessionId ? (await this.getSessionById(sessionId)) || (await this.getActiveSession()) : await this.getActiveSession();
     const activeWf = await this.getActiveWorkflow();
     const targetStatus = statusId || activeWf.statuses[0]?.id || 'waiting';
     const validStatus = activeWf.statuses.find((s) => s.id === targetStatus);
     const finalStatusId = validStatus ? validStatus.id : activeWf.statuses[0].id;
+    const finalOrder = order !== undefined ? order : await this.getNextTaskOrder(targetSession.id);
 
     const id = await this.getNextTaskId();
     const now = new Date().toISOString();
@@ -407,11 +439,12 @@ export class MssqlAdapter implements IDatabaseAdapter {
       .input('desc', sql.NVarChar, description)
       .input('status_id', sql.NVarChar, finalStatusId)
       .input('priority', sql.NVarChar, priority)
+      .input('order', sql.Float, finalOrder)
       .input('tags', sql.NVarChar, JSON.stringify(tags))
       .input('meta', sql.NVarChar, JSON.stringify(metadata))
       .input('created_at', sql.NVarChar, now)
       .input('updated_at', sql.NVarChar, now)
-      .query(`INSERT INTO tasks (id, session_id, workflow_id, title, description, status_id, priority, tags_json, metadata_json, created_at, updated_at) VALUES (@id, @session_id, @wf_id, @title, @desc, @status_id, @priority, @tags, @meta, @created_at, @updated_at)`);
+      .query(`INSERT INTO tasks (id, session_id, workflow_id, title, description, status_id, priority, [order], tags_json, metadata_json, created_at, updated_at) VALUES (@id, @session_id, @wf_id, @title, @desc, @status_id, @priority, @order, @tags, @meta, @created_at, @updated_at)`);
 
     const newTask: Task = {
       id,
@@ -421,6 +454,7 @@ export class MssqlAdapter implements IDatabaseAdapter {
       description,
       status_id: finalStatusId,
       priority,
+      order: finalOrder,
       tags,
       metadata,
       created_at: now,
@@ -432,7 +466,7 @@ export class MssqlAdapter implements IDatabaseAdapter {
       task_id: id,
       action_type: 'TASK_CREATED',
       to_status: finalStatusId,
-      details: `Added task [${id}] "${title}"`,
+      details: `Added task [${id}] "${title}" (order: ${finalOrder})`,
     });
 
     this.notify('TASK_UPDATED', newTask);
@@ -440,13 +474,15 @@ export class MssqlAdapter implements IDatabaseAdapter {
   }
 
   public async batchCreateTasks(
-    tasksInput: Array<{ title: string; description: string; status_id?: string; priority?: Task['priority']; tags?: string[]; session_id?: string }>,
+    tasksInput: Array<{ title: string; description: string; status_id?: string; priority?: Task['priority']; tags?: string[]; session_id?: string; order?: number }>,
     sessionId?: string
   ): Promise<Task[]> {
     const createdTasks: Task[] = [];
-    for (const t of tasksInput) {
+    for (let i = 0; i < tasksInput.length; i++) {
+      const t = tasksInput[i];
       const targetSessId = t.session_id || sessionId;
-      const created = await this.createTask(t.title, t.description, t.status_id, t.priority || 'medium', t.tags || [], {}, targetSessId);
+      const calcOrder = t.order !== undefined ? t.order : await this.getNextTaskOrder(targetSessId || '');
+      const created = await this.createTask(t.title, t.description, t.status_id, t.priority || 'medium', t.tags || [], {}, targetSessId, calcOrder);
       createdTasks.push(created);
     }
     return createdTasks;
@@ -480,7 +516,7 @@ export class MssqlAdapter implements IDatabaseAdapter {
 
   public async updateTask(
     taskId: string,
-    updates: Partial<Pick<Task, 'title' | 'description' | 'priority' | 'tags' | 'metadata'>>
+    updates: Partial<Pick<Task, 'title' | 'description' | 'priority' | 'tags' | 'metadata' | 'order'>>
   ): Promise<Task> {
     const task = await this.getTaskById(taskId);
     if (!task) throw new Error(`Task with ID ${taskId} not found`);
@@ -488,6 +524,7 @@ export class MssqlAdapter implements IDatabaseAdapter {
     const newTitle = updates.title ?? task.title;
     const newDesc = updates.description ?? task.description;
     const newPriority = updates.priority ?? task.priority;
+    const newOrder = updates.order ?? task.order;
     const newTags = updates.tags ?? task.tags;
     const newMeta = updates.metadata ?? task.metadata;
     const now = new Date().toISOString();
@@ -496,18 +533,19 @@ export class MssqlAdapter implements IDatabaseAdapter {
       .input('title', sql.NVarChar, newTitle)
       .input('desc', sql.NVarChar, newDesc)
       .input('priority', sql.NVarChar, newPriority)
+      .input('order', sql.Float, newOrder)
       .input('tags', sql.NVarChar, JSON.stringify(newTags))
       .input('meta', sql.NVarChar, JSON.stringify(newMeta))
       .input('updated_at', sql.NVarChar, now)
       .input('id', sql.NVarChar, taskId)
-      .query(`UPDATE tasks SET title = @title, description = @desc, priority = @priority, tags_json = @tags, metadata_json = @meta, updated_at = @updated_at WHERE id = @id`);
+      .query(`UPDATE tasks SET title = @title, description = @desc, priority = @priority, [order] = @order, tags_json = @tags, metadata_json = @meta, updated_at = @updated_at WHERE id = @id`);
 
     const updated = (await this.getTaskById(taskId))!;
     await this.logActivity({
       session_id: task.session_id,
       task_id: taskId,
       action_type: 'TASK_UPDATED',
-      details: `AI updated details for [${taskId}] "${updated.title}"`,
+      details: `AI updated details for [${taskId}] "${updated.title}" (order: ${updated.order})`,
     });
 
     this.notify('TASK_UPDATED', updated);

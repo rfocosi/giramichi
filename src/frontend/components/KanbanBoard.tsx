@@ -1,7 +1,7 @@
 import React from 'react';
 import { Status, Task } from '../../db/db.js';
 import { TaskCard } from './TaskCard.js';
-import { Inbox, CheckCircle2, Clock, PlayCircle, Code2, AlertCircle } from 'lucide-react';
+import { Inbox, CheckCircle2, Clock, PlayCircle, Code2 } from 'lucide-react';
 
 interface KanbanBoardProps {
   statuses: Status[];
@@ -33,10 +33,16 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ statuses, tasks, onTas
 
   const sortedStatuses = [...statuses].sort((a, b) => a.order - b.order);
 
+  // Identify next pending task to implement (lowest order non-completed task)
+  const pendingTasks = tasks.filter((t) => t.status_id !== 'done' && t.status_id !== 'completed');
+  pendingTasks.sort((a, b) => (a.order || 0) - (b.order || 0));
+  const nextTaskId = pendingTasks.length > 0 ? pendingTasks[0].id : null;
+
   return (
     <div className="board-container">
       {sortedStatuses.map((status) => {
         const columnTasks = tasks.filter((t) => t.status_id === status.id);
+        columnTasks.sort((a, b) => (a.order || 0) - (b.order || 0));
 
         return (
           <div key={status.id} className="kanban-column">
@@ -78,7 +84,14 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ statuses, tasks, onTas
                   No tasks currently in {status.name}
                 </div>
               ) : (
-                columnTasks.map((task) => <TaskCard key={task.id} task={task} onClick={onTaskClick} />)
+                columnTasks.map((task) => (
+                  <TaskCard
+                    key={task.id}
+                    task={task}
+                    isNextTask={task.id === nextTaskId}
+                    onClick={onTaskClick}
+                  />
+                ))
               )}
             </div>
           </div>
