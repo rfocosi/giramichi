@@ -61,6 +61,7 @@ export class SqliteAdapter implements IDatabaseAdapter {
         description TEXT NOT NULL,
         status_id TEXT NOT NULL,
         priority TEXT NOT NULL DEFAULT 'medium',
+        "order" REAL NOT NULL DEFAULT 1.0,
         tags_json TEXT NOT NULL DEFAULT '[]',
         metadata_json TEXT NOT NULL DEFAULT '{}',
         created_at TEXT NOT NULL,
@@ -84,6 +85,10 @@ export class SqliteAdapter implements IDatabaseAdapter {
 
     try {
       this.db.exec(`ALTER TABLE tasks ADD COLUMN session_id TEXT NOT NULL DEFAULT 'sess-default';`);
+    } catch (_) {}
+
+    try {
+      this.db.exec(`ALTER TABLE tasks ADD COLUMN "order" REAL NOT NULL DEFAULT 1.0;`);
     } catch (_) {}
 
     try {
@@ -314,11 +319,11 @@ export class SqliteAdapter implements IDatabaseAdapter {
   public async getTasks(workflowId?: string, sessionId?: string): Promise<Task[]> {
     let rows: any[];
     if (sessionId && sessionId !== 'all') {
-      rows = this.db.prepare(`SELECT * FROM tasks WHERE session_id = ? ORDER BY created_at DESC`).all(sessionId) as any[];
+      rows = this.db.prepare(`SELECT * FROM tasks WHERE session_id = ? ORDER BY "order" ASC, created_at ASC`).all(sessionId) as any[];
     } else if (workflowId) {
-      rows = this.db.prepare(`SELECT * FROM tasks WHERE workflow_id = ? ORDER BY created_at DESC`).all(workflowId) as any[];
+      rows = this.db.prepare(`SELECT * FROM tasks WHERE workflow_id = ? ORDER BY "order" ASC, created_at ASC`).all(workflowId) as any[];
     } else {
-      rows = this.db.prepare(`SELECT * FROM tasks ORDER BY created_at DESC`).all() as any[];
+      rows = this.db.prepare(`SELECT * FROM tasks ORDER BY "order" ASC, created_at ASC`).all() as any[];
     }
 
     return rows.map((r) => ({
@@ -329,6 +334,7 @@ export class SqliteAdapter implements IDatabaseAdapter {
       description: r.description,
       status_id: r.status_id,
       priority: r.priority,
+      order: r.order !== undefined && r.order !== null ? Number(r.order) : 1.0,
       tags: JSON.parse(r.tags_json),
       metadata: JSON.parse(r.metadata_json),
       created_at: r.created_at,
@@ -347,6 +353,7 @@ export class SqliteAdapter implements IDatabaseAdapter {
       description: r.description,
       status_id: r.status_id,
       priority: r.priority,
+      order: r.order !== undefined && r.order !== null ? Number(r.order) : 1.0,
       tags: JSON.parse(r.tags_json),
       metadata: JSON.parse(r.metadata_json),
       created_at: r.created_at,
@@ -360,6 +367,12 @@ export class SqliteAdapter implements IDatabaseAdapter {
     return `GIRA-${num}`;
   }
 
+  private getNextTaskOrder(sessionId: string): number {
+    const row = this.db.prepare(`SELECT MAX("order") as max_order FROM tasks WHERE session_id = ?`).get(sessionId) as any;
+    const maxVal = row && row.max_order !== null && row.max_order !== undefined ? Number(row.max_order) : 0.0;
+    return Math.round((maxVal + 1.0) * 100) / 100;
+  }
+
   public async createTask(
     title: string,
     description: string,
@@ -367,7 +380,8 @@ export class SqliteAdapter implements IDatabaseAdapter {
     priority: Task['priority'] = 'medium',
     tags: string[] = [],
     metadata: Record<string, any> = {},
-    sessionId?: string
+    sessionId?: string,
+    order?: number
   ): Promise<Task> {
     const targetSession = sessionId ? (await this.getSessionById(sessionId)) || (await this.getActiveSession()) : await this.getActiveSession();
     const activeWf = await this.getActiveWorkflow();
@@ -375,16 +389,17 @@ export class SqliteAdapter implements IDatabaseAdapter {
 
     const validStatus = activeWf.statuses.find((s) => s.id === targetStatus);
     const finalStatusId = validStatus ? validStatus.id : activeWf.statuses[0].id;
+    const finalOrder = order !== undefined ? order : this.getNextTaskOrder(targetSession.id);
 
     const id = this.getNextTaskId();
     const now = new Date().toISOString();
 
     const stmt = this.db.prepare(`
-      INSERT INTO tasks (id, session_id, workflow_id, title, description, status_id, priority, tags_json, metadata_json, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO tasks (id, session_id, workflow_id, title, description, status_id, priority, "order", tags_json, metadata_json, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
-    stmt.run(id, targetSession.id, activeWf.id, title, description, finalStatusId, priority, JSON.stringify(tags), JSON.stringify(metadata), now, now);
+    stmt.run(id, targetSession.id, activeWf.id, title, description, finalStatusId, priority, finalOrder, JSON.stringify(tags), JSON.stringify(metadata), now, now);
 
     const newTask: Task = {
       id,
@@ -394,6 +409,7 @@ export class SqliteAdapter implements IDatabaseAdapter {
       description,
       status_id: finalStatusId,
       priority,
+      order: finalOrder,
       tags,
       metadata,
       created_at: now,
@@ -406,7 +422,7 @@ export class SqliteAdapter implements IDatabaseAdapter {
       task_id: id,
       action_type: 'TASK_CREATED',
       to_status: finalStatusId,
-      details: `Added task [${id}] "${title}" to column [${statusName}]`,
+      details: `Added task [${id}] "${title}" to column [${statusName}] (order: ${finalOrder})`,
     });
 
     this.notify('TASK_UPDATED', newTask);
@@ -414,13 +430,15 @@ export class SqliteAdapter implements IDatabaseAdapter {
   }
 
   public async batchCreateTasks(
-    tasksInput: Array<{ title: string; description: string; status_id?: string; priority?: Task['priority']; tags?: string[]; session_id?: string }>,
+    tasksInput: Array<{ title: string; description: string; status_id?: string; priority?: Task['priority']; tags?: string[]; session_id?: string; order?: number }>,
     sessionId?: string
   ): Promise<Task[]> {
     const createdTasks: Task[] = [];
-    for (const t of tasksInput) {
+    for (let i = 0; i < tasksInput.length; i++) {
+      const t = tasksInput[i];
       const targetSessId = t.session_id || sessionId;
-      const created = await this.createTask(t.title, t.description, t.status_id, t.priority || 'medium', t.tags || [], {}, targetSessId);
+      const calcOrder = t.order !== undefined ? t.order : (await this.getSessionById(targetSessId || '')) ? this.getNextTaskOrder(targetSessId!) : i + 1.0;
+      const created = await this.createTask(t.title, t.description, t.status_id, t.priority || 'medium', t.tags || [], {}, targetSessId, calcOrder);
       createdTasks.push(created);
     }
     return createdTasks;
@@ -466,7 +484,7 @@ export class SqliteAdapter implements IDatabaseAdapter {
 
   public async updateTask(
     taskId: string,
-    updates: Partial<Pick<Task, 'title' | 'description' | 'priority' | 'tags' | 'metadata'>>
+    updates: Partial<Pick<Task, 'title' | 'description' | 'priority' | 'tags' | 'metadata' | 'order'>>
   ): Promise<Task> {
     const task = await this.getTaskById(taskId);
     if (!task) {
@@ -476,22 +494,23 @@ export class SqliteAdapter implements IDatabaseAdapter {
     const newTitle = updates.title ?? task.title;
     const newDesc = updates.description ?? task.description;
     const newPriority = updates.priority ?? task.priority;
+    const newOrder = updates.order ?? task.order;
     const newTags = updates.tags ?? task.tags;
     const newMeta = updates.metadata ?? task.metadata;
     const now = new Date().toISOString();
 
     this.db.prepare(`
       UPDATE tasks
-      SET title = ?, description = ?, priority = ?, tags_json = ?, metadata_json = ?, updated_at = ?
+      SET title = ?, description = ?, priority = ?, "order" = ?, tags_json = ?, metadata_json = ?, updated_at = ?
       WHERE id = ?
-    `).run(newTitle, newDesc, newPriority, JSON.stringify(newTags), JSON.stringify(newMeta), now, taskId);
+    `).run(newTitle, newDesc, newPriority, newOrder, JSON.stringify(newTags), JSON.stringify(newMeta), now, taskId);
 
     const updated = (await this.getTaskById(taskId))!;
     await this.logActivity({
       session_id: task.session_id,
       task_id: taskId,
       action_type: 'TASK_UPDATED',
-      details: `AI updated details for [${taskId}] "${updated.title}"`,
+      details: `AI updated details for [${taskId}] "${updated.title}" (order: ${updated.order})`,
     });
 
     this.notify('TASK_UPDATED', updated);

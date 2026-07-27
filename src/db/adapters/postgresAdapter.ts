@@ -66,6 +66,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
         description TEXT NOT NULL,
         status_id VARCHAR(64) NOT NULL,
         priority VARCHAR(32) NOT NULL DEFAULT 'medium',
+        "order" DOUBLE PRECISION NOT NULL DEFAULT 1.0,
         tags_json JSONB NOT NULL DEFAULT '[]'::jsonb,
         metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
         created_at VARCHAR(64) NOT NULL,
@@ -82,13 +83,17 @@ export class PostgresAdapter implements IDatabaseAdapter {
         details TEXT NOT NULL,
         from_status VARCHAR(64),
         to_status VARCHAR(64),
-        reason TEXT,
+        reason VARCHAR(64),
         timestamp VARCHAR(64) NOT NULL
       );
     `);
 
     try {
       await this.pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS session_id VARCHAR(64) NOT NULL DEFAULT 'sess-default';`);
+    } catch (_) {}
+
+    try {
+      await this.pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS "order" DOUBLE PRECISION NOT NULL DEFAULT 1.0;`);
     } catch (_) {}
 
     try {
@@ -306,11 +311,11 @@ export class PostgresAdapter implements IDatabaseAdapter {
   public async getTasks(workflowId?: string, sessionId?: string): Promise<Task[]> {
     let res: pg.QueryResult;
     if (sessionId && sessionId !== 'all') {
-      res = await this.pool.query(`SELECT * FROM tasks WHERE session_id = $1 ORDER BY created_at DESC`, [sessionId]);
+      res = await this.pool.query(`SELECT * FROM tasks WHERE session_id = $1 ORDER BY "order" ASC, created_at ASC`, [sessionId]);
     } else if (workflowId) {
-      res = await this.pool.query(`SELECT * FROM tasks WHERE workflow_id = $1 ORDER BY created_at DESC`, [workflowId]);
+      res = await this.pool.query(`SELECT * FROM tasks WHERE workflow_id = $1 ORDER BY "order" ASC, created_at ASC`, [workflowId]);
     } else {
-      res = await this.pool.query(`SELECT * FROM tasks ORDER BY created_at DESC`);
+      res = await this.pool.query(`SELECT * FROM tasks ORDER BY "order" ASC, created_at ASC`);
     }
 
     return res.rows.map((r) => ({
@@ -321,6 +326,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
       description: r.description,
       status_id: r.status_id,
       priority: r.priority,
+      order: r.order !== undefined && r.order !== null ? Number(r.order) : 1.0,
       tags: typeof r.tags_json === 'string' ? JSON.parse(r.tags_json) : r.tags_json,
       metadata: typeof r.metadata_json === 'string' ? JSON.parse(r.metadata_json) : r.metadata_json,
       created_at: r.created_at,
@@ -340,6 +346,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
       description: r.description,
       status_id: r.status_id,
       priority: r.priority,
+      order: r.order !== undefined && r.order !== null ? Number(r.order) : 1.0,
       tags: typeof r.tags_json === 'string' ? JSON.parse(r.tags_json) : r.tags_json,
       metadata: typeof r.metadata_json === 'string' ? JSON.parse(r.metadata_json) : r.metadata_json,
       created_at: r.created_at,
@@ -353,6 +360,12 @@ export class PostgresAdapter implements IDatabaseAdapter {
     return `GIRA-${num}`;
   }
 
+  private async getNextTaskOrder(sessionId: string): Promise<number> {
+    const res = await this.pool.query(`SELECT MAX("order") as max_order FROM tasks WHERE session_id = $1`, [sessionId]);
+    const maxVal = res.rows[0] && res.rows[0].max_order !== null && res.rows[0].max_order !== undefined ? Number(res.rows[0].max_order) : 0.0;
+    return Math.round((maxVal + 1.0) * 100) / 100;
+  }
+
   public async createTask(
     title: string,
     description: string,
@@ -360,21 +373,23 @@ export class PostgresAdapter implements IDatabaseAdapter {
     priority: Task['priority'] = 'medium',
     tags: string[] = [],
     metadata: Record<string, any> = {},
-    sessionId?: string
+    sessionId?: string,
+    order?: number
   ): Promise<Task> {
     const targetSession = sessionId ? (await this.getSessionById(sessionId)) || (await this.getActiveSession()) : await this.getActiveSession();
     const activeWf = await this.getActiveWorkflow();
     const targetStatus = statusId || activeWf.statuses[0]?.id || 'waiting';
     const validStatus = activeWf.statuses.find((s) => s.id === targetStatus);
     const finalStatusId = validStatus ? validStatus.id : activeWf.statuses[0].id;
+    const finalOrder = order !== undefined ? order : await this.getNextTaskOrder(targetSession.id);
 
     const id = await this.getNextTaskId();
     const now = new Date().toISOString();
 
     await this.pool.query(
-      `INSERT INTO tasks (id, session_id, workflow_id, title, description, status_id, priority, tags_json, metadata_json, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-      [id, targetSession.id, activeWf.id, title, description, finalStatusId, priority, JSON.stringify(tags), JSON.stringify(metadata), now, now]
+      `INSERT INTO tasks (id, session_id, workflow_id, title, description, status_id, priority, "order", tags_json, metadata_json, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+      [id, targetSession.id, activeWf.id, title, description, finalStatusId, priority, finalOrder, JSON.stringify(tags), JSON.stringify(metadata), now, now]
     );
 
     const newTask: Task = {
@@ -385,6 +400,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
       description,
       status_id: finalStatusId,
       priority,
+      order: finalOrder,
       tags,
       metadata,
       created_at: now,
@@ -396,7 +412,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
       task_id: id,
       action_type: 'TASK_CREATED',
       to_status: finalStatusId,
-      details: `Added task [${id}] "${title}"`,
+      details: `Added task [${id}] "${title}" (order: ${finalOrder})`,
     });
 
     this.notify('TASK_UPDATED', newTask);
@@ -404,13 +420,15 @@ export class PostgresAdapter implements IDatabaseAdapter {
   }
 
   public async batchCreateTasks(
-    tasksInput: Array<{ title: string; description: string; status_id?: string; priority?: Task['priority']; tags?: string[]; session_id?: string }>,
+    tasksInput: Array<{ title: string; description: string; status_id?: string; priority?: Task['priority']; tags?: string[]; session_id?: string; order?: number }>,
     sessionId?: string
   ): Promise<Task[]> {
     const createdTasks: Task[] = [];
-    for (const t of tasksInput) {
+    for (let i = 0; i < tasksInput.length; i++) {
+      const t = tasksInput[i];
       const targetSessId = t.session_id || sessionId;
-      const created = await this.createTask(t.title, t.description, t.status_id, t.priority || 'medium', t.tags || [], {}, targetSessId);
+      const calcOrder = t.order !== undefined ? t.order : await this.getNextTaskOrder(targetSessId || '');
+      const created = await this.createTask(t.title, t.description, t.status_id, t.priority || 'medium', t.tags || [], {}, targetSessId, calcOrder);
       createdTasks.push(created);
     }
     return createdTasks;
@@ -440,7 +458,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
 
   public async updateTask(
     taskId: string,
-    updates: Partial<Pick<Task, 'title' | 'description' | 'priority' | 'tags' | 'metadata'>>
+    updates: Partial<Pick<Task, 'title' | 'description' | 'priority' | 'tags' | 'metadata' | 'order'>>
   ): Promise<Task> {
     const task = await this.getTaskById(taskId);
     if (!task) throw new Error(`Task with ID ${taskId} not found`);
@@ -448,13 +466,14 @@ export class PostgresAdapter implements IDatabaseAdapter {
     const newTitle = updates.title ?? task.title;
     const newDesc = updates.description ?? task.description;
     const newPriority = updates.priority ?? task.priority;
+    const newOrder = updates.order ?? task.order;
     const newTags = updates.tags ?? task.tags;
     const newMeta = updates.metadata ?? task.metadata;
     const now = new Date().toISOString();
 
     await this.pool.query(
-      `UPDATE tasks SET title = $1, description = $2, priority = $3, tags_json = $4, metadata_json = $5, updated_at = $6 WHERE id = $7`,
-      [newTitle, newDesc, newPriority, JSON.stringify(newTags), JSON.stringify(newMeta), now, taskId]
+      `UPDATE tasks SET title = $1, description = $2, priority = $3, "order" = $4, tags_json = $5, metadata_json = $6, updated_at = $7 WHERE id = $8`,
+      [newTitle, newDesc, newPriority, newOrder, JSON.stringify(newTags), JSON.stringify(newMeta), now, taskId]
     );
 
     const updated = (await this.getTaskById(taskId))!;
@@ -462,7 +481,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
       session_id: task.session_id,
       task_id: taskId,
       action_type: 'TASK_UPDATED',
-      details: `AI updated details for [${taskId}] "${updated.title}"`,
+      details: `AI updated details for [${taskId}] "${updated.title}" (order: ${updated.order})`,
     });
 
     this.notify('TASK_UPDATED', updated);

@@ -72,6 +72,7 @@ export class MysqlAdapter implements IDatabaseAdapter {
         description TEXT NOT NULL,
         status_id VARCHAR(64) NOT NULL,
         priority VARCHAR(32) NOT NULL DEFAULT 'medium',
+        \`order\` DOUBLE NOT NULL DEFAULT 1.0,
         tags_json JSON NOT NULL,
         metadata_json JSON NOT NULL,
         created_at VARCHAR(64) NOT NULL,
@@ -94,6 +95,18 @@ export class MysqlAdapter implements IDatabaseAdapter {
         timestamp VARCHAR(64) NOT NULL
       );
     `);
+
+    try {
+      await this.pool.query(`ALTER TABLE tasks ADD COLUMN session_id VARCHAR(64) NOT NULL DEFAULT 'sess-default';`);
+    } catch (_) {}
+
+    try {
+      await this.pool.query(`ALTER TABLE tasks ADD COLUMN \`order\` DOUBLE NOT NULL DEFAULT 1.0;`);
+    } catch (_) {}
+
+    try {
+      await this.pool.query(`ALTER TABLE activity_logs ADD COLUMN session_id VARCHAR(64);`);
+    } catch (_) {}
   }
 
   private async seedDefaultIfEmpty() {
@@ -306,13 +319,13 @@ export class MysqlAdapter implements IDatabaseAdapter {
   public async getTasks(workflowId?: string, sessionId?: string): Promise<Task[]> {
     let rows: any[];
     if (sessionId && sessionId !== 'all') {
-      const [res]: any = await this.pool.query(`SELECT * FROM tasks WHERE session_id = ? ORDER BY created_at DESC`, [sessionId]);
+      const [res]: any = await this.pool.query(`SELECT * FROM tasks WHERE session_id = ? ORDER BY \`order\` ASC, created_at ASC`, [sessionId]);
       rows = res;
     } else if (workflowId) {
-      const [res]: any = await this.pool.query(`SELECT * FROM tasks WHERE workflow_id = ? ORDER BY created_at DESC`, [workflowId]);
+      const [res]: any = await this.pool.query(`SELECT * FROM tasks WHERE workflow_id = ? ORDER BY \`order\` ASC, created_at ASC`, [workflowId]);
       rows = res;
     } else {
-      const [res]: any = await this.pool.query(`SELECT * FROM tasks ORDER BY created_at DESC`);
+      const [res]: any = await this.pool.query(`SELECT * FROM tasks ORDER BY \`order\` ASC, created_at ASC`);
       rows = res;
     }
 
@@ -324,6 +337,7 @@ export class MysqlAdapter implements IDatabaseAdapter {
       description: r.description,
       status_id: r.status_id,
       priority: r.priority,
+      order: r.order !== undefined && r.order !== null ? Number(r.order) : 1.0,
       tags: typeof r.tags_json === 'string' ? JSON.parse(r.tags_json) : r.tags_json,
       metadata: typeof r.metadata_json === 'string' ? JSON.parse(r.metadata_json) : r.metadata_json,
       created_at: r.created_at,
@@ -343,6 +357,7 @@ export class MysqlAdapter implements IDatabaseAdapter {
       description: r.description,
       status_id: r.status_id,
       priority: r.priority,
+      order: r.order !== undefined && r.order !== null ? Number(r.order) : 1.0,
       tags: typeof r.tags_json === 'string' ? JSON.parse(r.tags_json) : r.tags_json,
       metadata: typeof r.metadata_json === 'string' ? JSON.parse(r.metadata_json) : r.metadata_json,
       created_at: r.created_at,
@@ -356,6 +371,12 @@ export class MysqlAdapter implements IDatabaseAdapter {
     return `GIRA-${num}`;
   }
 
+  private async getNextTaskOrder(sessionId: string): Promise<number> {
+    const [rows]: any = await this.pool.query(`SELECT MAX(\`order\`) as max_order FROM tasks WHERE session_id = ?`, [sessionId]);
+    const maxVal = rows[0] && rows[0].max_order !== null && rows[0].max_order !== undefined ? Number(rows[0].max_order) : 0.0;
+    return Math.round((maxVal + 1.0) * 100) / 100;
+  }
+
   public async createTask(
     title: string,
     description: string,
@@ -363,21 +384,23 @@ export class MysqlAdapter implements IDatabaseAdapter {
     priority: Task['priority'] = 'medium',
     tags: string[] = [],
     metadata: Record<string, any> = {},
-    sessionId?: string
+    sessionId?: string,
+    order?: number
   ): Promise<Task> {
     const targetSession = sessionId ? (await this.getSessionById(sessionId)) || (await this.getActiveSession()) : await this.getActiveSession();
     const activeWf = await this.getActiveWorkflow();
     const targetStatus = statusId || activeWf.statuses[0]?.id || 'waiting';
     const validStatus = activeWf.statuses.find((s) => s.id === targetStatus);
     const finalStatusId = validStatus ? validStatus.id : activeWf.statuses[0].id;
+    const finalOrder = order !== undefined ? order : await this.getNextTaskOrder(targetSession.id);
 
     const id = await this.getNextTaskId();
     const now = new Date().toISOString();
 
     await this.pool.query(
-      `INSERT INTO tasks (id, session_id, workflow_id, title, description, status_id, priority, tags_json, metadata_json, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, targetSession.id, activeWf.id, title, description, finalStatusId, priority, JSON.stringify(tags), JSON.stringify(metadata), now, now]
+      `INSERT INTO tasks (id, session_id, workflow_id, title, description, status_id, priority, \`order\`, tags_json, metadata_json, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, targetSession.id, activeWf.id, title, description, finalStatusId, priority, finalOrder, JSON.stringify(tags), JSON.stringify(metadata), now, now]
     );
 
     const newTask: Task = {
@@ -388,6 +411,7 @@ export class MysqlAdapter implements IDatabaseAdapter {
       description,
       status_id: finalStatusId,
       priority,
+      order: finalOrder,
       tags,
       metadata,
       created_at: now,
@@ -399,7 +423,7 @@ export class MysqlAdapter implements IDatabaseAdapter {
       task_id: id,
       action_type: 'TASK_CREATED',
       to_status: finalStatusId,
-      details: `Added task [${id}] "${title}"`,
+      details: `Added task [${id}] "${title}" (order: ${finalOrder})`,
     });
 
     this.notify('TASK_UPDATED', newTask);
@@ -407,13 +431,15 @@ export class MysqlAdapter implements IDatabaseAdapter {
   }
 
   public async batchCreateTasks(
-    tasksInput: Array<{ title: string; description: string; status_id?: string; priority?: Task['priority']; tags?: string[]; session_id?: string }>,
+    tasksInput: Array<{ title: string; description: string; status_id?: string; priority?: Task['priority']; tags?: string[]; session_id?: string; order?: number }>,
     sessionId?: string
   ): Promise<Task[]> {
     const createdTasks: Task[] = [];
-    for (const t of tasksInput) {
+    for (let i = 0; i < tasksInput.length; i++) {
+      const t = tasksInput[i];
       const targetSessId = t.session_id || sessionId;
-      const created = await this.createTask(t.title, t.description, t.status_id, t.priority || 'medium', t.tags || [], {}, targetSessId);
+      const calcOrder = t.order !== undefined ? t.order : await this.getNextTaskOrder(targetSessId || '');
+      const created = await this.createTask(t.title, t.description, t.status_id, t.priority || 'medium', t.tags || [], {}, targetSessId, calcOrder);
       createdTasks.push(created);
     }
     return createdTasks;
@@ -443,7 +469,7 @@ export class MysqlAdapter implements IDatabaseAdapter {
 
   public async updateTask(
     taskId: string,
-    updates: Partial<Pick<Task, 'title' | 'description' | 'priority' | 'tags' | 'metadata'>>
+    updates: Partial<Pick<Task, 'title' | 'description' | 'priority' | 'tags' | 'metadata' | 'order'>>
   ): Promise<Task> {
     const task = await this.getTaskById(taskId);
     if (!task) throw new Error(`Task with ID ${taskId} not found`);
@@ -451,13 +477,14 @@ export class MysqlAdapter implements IDatabaseAdapter {
     const newTitle = updates.title ?? task.title;
     const newDesc = updates.description ?? task.description;
     const newPriority = updates.priority ?? task.priority;
+    const newOrder = updates.order ?? task.order;
     const newTags = updates.tags ?? task.tags;
     const newMeta = updates.metadata ?? task.metadata;
     const now = new Date().toISOString();
 
     await this.pool.query(
-      `UPDATE tasks SET title = ?, description = ?, priority = ?, tags_json = ?, metadata_json = ?, updated_at = ? WHERE id = ?`,
-      [newTitle, newDesc, newPriority, JSON.stringify(newTags), JSON.stringify(newMeta), now, taskId]
+      `UPDATE tasks SET title = ?, description = ?, priority = ?, \`order\` = ?, tags_json = ?, metadata_json = ?, updated_at = ? WHERE id = ?`,
+      [newTitle, newDesc, newPriority, newOrder, JSON.stringify(newTags), JSON.stringify(newMeta), now, taskId]
     );
 
     const updated = (await this.getTaskById(taskId))!;
@@ -465,7 +492,7 @@ export class MysqlAdapter implements IDatabaseAdapter {
       session_id: task.session_id,
       task_id: taskId,
       action_type: 'TASK_UPDATED',
-      details: `AI updated details for [${taskId}] "${updated.title}"`,
+      details: `AI updated details for [${taskId}] "${updated.title}" (order: ${updated.order})`,
     });
 
     this.notify('TASK_UPDATED', updated);

@@ -34,6 +34,7 @@ export interface Task {
   description: string;
   status_id: string;
   priority: 'low' | 'medium' | 'high' | 'urgent';
+  order: number; // Execution sequence order (e.g. 1.0, 1.1, 1.5, 2.0)
   tags: string[];
   metadata?: Record<string, any>;
   created_at: string;
@@ -80,14 +81,15 @@ export interface IDatabaseAdapter {
     priority?: Task['priority'],
     tags?: string[],
     metadata?: Record<string, any>,
-    sessionId?: string
+    sessionId?: string,
+    order?: number
   ): Promise<Task>;
   batchCreateTasks(
-    tasksInput: Array<{ title: string; description: string; status_id?: string; priority?: Task['priority']; tags?: string[]; session_id?: string }>,
+    tasksInput: Array<{ title: string; description: string; status_id?: string; priority?: Task['priority']; tags?: string[]; session_id?: string; order?: number }>,
     sessionId?: string
   ): Promise<Task[]>;
   moveTask(taskId: string, newStatusId: string, reason?: string): Promise<Task>;
-  updateTask(taskId: string, updates: Partial<Pick<Task, 'title' | 'description' | 'priority' | 'tags' | 'metadata'>>): Promise<Task>;
+  updateTask(taskId: string, updates: Partial<Pick<Task, 'title' | 'description' | 'priority' | 'tags' | 'metadata' | 'order'>>): Promise<Task>;
   
   // Activity Logs
   logActivity(log: Omit<ActivityLog, 'id' | 'timestamp'>): Promise<void>;
