@@ -48,13 +48,44 @@ app.get('/api/events', (req: Request, res: Response) => {
   });
 });
 
+// Sessions API
+app.get('/api/sessions', async (req: Request, res: Response) => {
+  try {
+    const status = req.query.status ? (req.query.status as string) : undefined;
+    const sessions = await db.getSessions(status);
+    const activeSession = await db.getActiveSession();
+    res.json({ success: true, sessions, activeSessionId: activeSession.id });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/api/sessions/:id', async (req: Request, res: Response) => {
+  try {
+    const sessionId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const session = await db.getSessionById(sessionId);
+    if (!session) {
+      return res.status(404).json({ success: false, error: 'Session not found' });
+    }
+    const tasks = await db.getTasks(undefined, sessionId);
+    const logs = await db.getActivityLogs(50, sessionId);
+    res.json({ success: true, session, tasks, logs });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Read-only Board API
 app.get('/api/board', async (req: Request, res: Response) => {
   try {
+    const sessionId = req.query.session_id ? (req.query.session_id as string) : undefined;
+    const sessions = await db.getSessions();
+    const activeSession = await db.getActiveSession();
+    const targetSessionId = sessionId || activeSession.id;
     const workflow = await db.getActiveWorkflow();
-    const tasks = await db.getTasks(workflow.id);
-    const logs = await db.getActivityLogs(20);
-    res.json({ success: true, workflow, tasks, logs });
+    const tasks = await db.getTasks(workflow.id, targetSessionId);
+    const logs = await db.getActivityLogs(20, targetSessionId);
+    res.json({ success: true, workflow, sessions, activeSessionId: targetSessionId, tasks, logs });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -89,7 +120,8 @@ app.get('/api/tasks/:id', async (req: Request, res: Response) => {
 app.get('/api/activity', async (req: Request, res: Response) => {
   try {
     const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
-    const logs = await db.getActivityLogs(limit);
+    const sessionId = req.query.session_id ? (req.query.session_id as string) : undefined;
+    const logs = await db.getActivityLogs(limit, sessionId);
     res.json({ success: true, logs });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -116,4 +148,3 @@ app.listen(PORT, () => {
   console.log(`[Giramichi Server] MCP SSE Stream endpoint:      http://localhost:${PORT}/mcp/sse`);
   console.log(`[Giramichi Server] Real-time SSE stream at       http://localhost:${PORT}/api/events`);
 });
-

@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
-import { IDatabaseAdapter, Workflow, Task, ActivityLog, Status, EventListener } from '../types.js';
+import { IDatabaseAdapter, Workflow, Task, ActivityLog, Status, Session, EventListener } from '../types.js';
 
 export class SqliteAdapter implements IDatabaseAdapter {
   private db!: Database.Database;
@@ -41,8 +41,21 @@ export class SqliteAdapter implements IDatabaseAdapter {
         created_at TEXT NOT NULL
       );
 
+      CREATE TABLE IF NOT EXISTS sessions (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT NOT NULL,
+        agent_id TEXT,
+        status TEXT NOT NULL DEFAULT 'active',
+        workflow_id TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (workflow_id) REFERENCES workflows(id)
+      );
+
       CREATE TABLE IF NOT EXISTS tasks (
         id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL DEFAULT 'sess-default',
         workflow_id TEXT NOT NULL,
         title TEXT NOT NULL,
         description TEXT NOT NULL,
@@ -52,11 +65,13 @@ export class SqliteAdapter implements IDatabaseAdapter {
         metadata_json TEXT NOT NULL DEFAULT '{}',
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
+        FOREIGN KEY (session_id) REFERENCES sessions(id),
         FOREIGN KEY (workflow_id) REFERENCES workflows(id)
       );
 
       CREATE TABLE IF NOT EXISTS activity_logs (
         id TEXT PRIMARY KEY,
+        session_id TEXT,
         task_id TEXT,
         action_type TEXT NOT NULL,
         details TEXT NOT NULL,
@@ -66,26 +81,164 @@ export class SqliteAdapter implements IDatabaseAdapter {
         timestamp TEXT NOT NULL
       );
     `);
+
+    try {
+      this.db.exec(`ALTER TABLE tasks ADD COLUMN session_id TEXT NOT NULL DEFAULT 'sess-default';`);
+    } catch (_) {}
+
+    try {
+      this.db.exec(`ALTER TABLE activity_logs ADD COLUMN session_id TEXT;`);
+    } catch (_) {}
   }
 
   private seedDefaultIfEmpty() {
-    const count = (this.db.prepare(`SELECT count(*) as cnt FROM workflows`).get() as any).cnt;
-    if (count === 0) {
+    const wfCount = (this.db.prepare(`SELECT count(*) as cnt FROM workflows`).get() as any).cnt;
+    let defaultWf: Workflow;
+    if (wfCount === 0) {
       const defaultStatuses: Status[] = [
         { id: 'waiting', name: 'Waiting', color: '#3b82f6', order: 1, description: 'Tasks queued awaiting AI execution' },
         { id: 'in_progress', name: 'In Progress', color: '#f59e0b', order: 2, description: 'Tasks actively being developed by AI' },
         { id: 'done', name: 'Done', color: '#10b981', order: 3, description: 'Completed and verified deliverables' },
       ];
 
-      this.createWorkflow(
-        'Default Standard Workflow',
-        'Initial baseline workflow with Waiting -> In Progress -> Done',
-        defaultStatuses,
-        true
-      );
+      const id = `wf-default`;
+      const created_at = new Date().toISOString();
+      this.db.prepare(`
+        INSERT INTO workflows (id, name, description, statuses_json, is_active, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(id, 'Default Standard Workflow', 'Initial baseline workflow with Waiting -> In Progress -> Done', JSON.stringify(defaultStatuses), 1, created_at);
+      defaultWf = { id, name: 'Default Standard Workflow', description: 'Initial baseline workflow', statuses: defaultStatuses, is_active: true, created_at };
+    } else {
+      const row = this.db.prepare(`SELECT * FROM workflows WHERE is_active = 1 LIMIT 1`).get() as any;
+      defaultWf = {
+        id: row.id,
+        name: row.name,
+        description: row.description,
+        statuses: JSON.parse(row.statuses_json),
+        is_active: Boolean(row.is_active),
+        created_at: row.created_at,
+      };
+    }
+
+    const sessCount = (this.db.prepare(`SELECT count(*) as cnt FROM sessions`).get() as any).cnt;
+    if (sessCount === 0) {
+      const now = new Date().toISOString();
+      this.db.prepare(`
+        INSERT INTO sessions (id, name, description, agent_id, status, workflow_id, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run('sess-default', 'Primary Agent Session', 'Default execution session for multi-agent tasks', 'Primary-Agent', 'active', defaultWf.id, now, now);
     }
   }
 
+  // Session management
+  public async getSessions(status?: string): Promise<Session[]> {
+    let rows: any[];
+    if (status) {
+      rows = this.db.prepare(`SELECT * FROM sessions WHERE status = ? ORDER BY updated_at DESC`).all(status) as any[];
+    } else {
+      rows = this.db.prepare(`SELECT * FROM sessions ORDER BY updated_at DESC`).all() as any[];
+    }
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      description: r.description,
+      agent_id: r.agent_id || undefined,
+      status: r.status as Session['status'],
+      workflow_id: r.workflow_id,
+      created_at: r.created_at,
+      updated_at: r.updated_at,
+    }));
+  }
+
+  public async getSessionById(sessionId: string): Promise<Session | null> {
+    const r = this.db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(sessionId) as any;
+    if (!r) return null;
+    return {
+      id: r.id,
+      name: r.name,
+      description: r.description,
+      agent_id: r.agent_id || undefined,
+      status: r.status as Session['status'],
+      workflow_id: r.workflow_id,
+      created_at: r.created_at,
+      updated_at: r.updated_at,
+    };
+  }
+
+  public async getActiveSession(): Promise<Session> {
+    let row = this.db.prepare(`SELECT * FROM sessions WHERE status = 'active' ORDER BY updated_at DESC LIMIT 1`).get() as any;
+    if (!row) {
+      row = this.db.prepare(`SELECT * FROM sessions ORDER BY updated_at DESC LIMIT 1`).get() as any;
+    }
+    if (!row) {
+      const activeWf = await this.getActiveWorkflow();
+      return this.createSession('New Agent Session', 'Autonomous session container', 'Agent-1', activeWf.id);
+    }
+    return {
+      id: row.id,
+      name: row.name,
+      description: row.description,
+      agent_id: row.agent_id || undefined,
+      status: row.status as Session['status'],
+      workflow_id: row.workflow_id,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+    };
+  }
+
+  public async createSession(name: string, description: string, agentId?: string, workflowId?: string): Promise<Session> {
+    const id = `sess-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const targetWf = workflowId || (await this.getActiveWorkflow()).id;
+    const now = new Date().toISOString();
+
+    const stmt = this.db.prepare(`
+      INSERT INTO sessions (id, name, description, agent_id, status, workflow_id, created_at, updated_at)
+      VALUES (?, ?, ?, ?, 'active', ?, ?, ?)
+    `);
+    stmt.run(id, name, description, agentId || null, targetWf, now, now);
+
+    const session: Session = {
+      id,
+      name,
+      description,
+      agent_id: agentId,
+      status: 'active',
+      workflow_id: targetWf,
+      created_at: now,
+      updated_at: now,
+    };
+
+    await this.logActivity({
+      session_id: id,
+      action_type: 'SESSION_CREATED',
+      details: `Created new execution session "${name}"${agentId ? ` for agent [${agentId}]` : ''}`,
+    });
+
+    this.notify('SESSION_CREATED', session);
+    return session;
+  }
+
+  public async updateSessionStatus(sessionId: string, status: Session['status']): Promise<Session> {
+    const session = await this.getSessionById(sessionId);
+    if (!session) {
+      throw new Error(`Session with ID ${sessionId} not found`);
+    }
+
+    const now = new Date().toISOString();
+    this.db.prepare(`UPDATE sessions SET status = ?, updated_at = ? WHERE id = ?`).run(status, now, sessionId);
+
+    const updatedSession: Session = { ...session, status, updated_at: now };
+    await this.logActivity({
+      session_id: sessionId,
+      action_type: 'SESSION_UPDATED',
+      details: `Updated session "${session.name}" status to [${status}]`,
+    });
+
+    this.notify('SESSION_UPDATED', updatedSession);
+    return updatedSession;
+  }
+
+  // Workflows
   public async getWorkflows(): Promise<Workflow[]> {
     const rows = this.db.prepare(`SELECT * FROM workflows ORDER BY created_at DESC`).all() as any[];
     return rows.map((r) => ({
@@ -157,11 +310,20 @@ export class SqliteAdapter implements IDatabaseAdapter {
     return activeWf;
   }
 
-  public async getTasks(workflowId?: string): Promise<Task[]> {
-    const targetWf = workflowId || (await this.getActiveWorkflow()).id;
-    const rows = this.db.prepare(`SELECT * FROM tasks WHERE workflow_id = ? ORDER BY created_at DESC`).all(targetWf) as any[];
+  // Tasks
+  public async getTasks(workflowId?: string, sessionId?: string): Promise<Task[]> {
+    let rows: any[];
+    if (sessionId && sessionId !== 'all') {
+      rows = this.db.prepare(`SELECT * FROM tasks WHERE session_id = ? ORDER BY created_at DESC`).all(sessionId) as any[];
+    } else if (workflowId) {
+      rows = this.db.prepare(`SELECT * FROM tasks WHERE workflow_id = ? ORDER BY created_at DESC`).all(workflowId) as any[];
+    } else {
+      rows = this.db.prepare(`SELECT * FROM tasks ORDER BY created_at DESC`).all() as any[];
+    }
+
     return rows.map((r) => ({
       id: r.id,
+      session_id: r.session_id,
       workflow_id: r.workflow_id,
       title: r.title,
       description: r.description,
@@ -179,6 +341,7 @@ export class SqliteAdapter implements IDatabaseAdapter {
     if (!r) return null;
     return {
       id: r.id,
+      session_id: r.session_id,
       workflow_id: r.workflow_id,
       title: r.title,
       description: r.description,
@@ -203,8 +366,10 @@ export class SqliteAdapter implements IDatabaseAdapter {
     statusId?: string,
     priority: Task['priority'] = 'medium',
     tags: string[] = [],
-    metadata: Record<string, any> = {}
+    metadata: Record<string, any> = {},
+    sessionId?: string
   ): Promise<Task> {
+    const targetSession = sessionId ? (await this.getSessionById(sessionId)) || (await this.getActiveSession()) : await this.getActiveSession();
     const activeWf = await this.getActiveWorkflow();
     const targetStatus = statusId || activeWf.statuses[0]?.id || 'waiting';
 
@@ -215,14 +380,15 @@ export class SqliteAdapter implements IDatabaseAdapter {
     const now = new Date().toISOString();
 
     const stmt = this.db.prepare(`
-      INSERT INTO tasks (id, workflow_id, title, description, status_id, priority, tags_json, metadata_json, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO tasks (id, session_id, workflow_id, title, description, status_id, priority, tags_json, metadata_json, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
-    stmt.run(id, activeWf.id, title, description, finalStatusId, priority, JSON.stringify(tags), JSON.stringify(metadata), now, now);
+    stmt.run(id, targetSession.id, activeWf.id, title, description, finalStatusId, priority, JSON.stringify(tags), JSON.stringify(metadata), now, now);
 
     const newTask: Task = {
       id,
+      session_id: targetSession.id,
       workflow_id: activeWf.id,
       title,
       description,
@@ -236,6 +402,7 @@ export class SqliteAdapter implements IDatabaseAdapter {
 
     const statusName = validStatus ? validStatus.name : finalStatusId;
     await this.logActivity({
+      session_id: targetSession.id,
       task_id: id,
       action_type: 'TASK_CREATED',
       to_status: finalStatusId,
@@ -247,11 +414,13 @@ export class SqliteAdapter implements IDatabaseAdapter {
   }
 
   public async batchCreateTasks(
-    tasksInput: Array<{ title: string; description: string; status_id?: string; priority?: Task['priority']; tags?: string[] }>
+    tasksInput: Array<{ title: string; description: string; status_id?: string; priority?: Task['priority']; tags?: string[]; session_id?: string }>,
+    sessionId?: string
   ): Promise<Task[]> {
     const createdTasks: Task[] = [];
     for (const t of tasksInput) {
-      const created = await this.createTask(t.title, t.description, t.status_id, t.priority || 'medium', t.tags || []);
+      const targetSessId = t.session_id || sessionId;
+      const created = await this.createTask(t.title, t.description, t.status_id, t.priority || 'medium', t.tags || [], {}, targetSessId);
       createdTasks.push(created);
     }
     return createdTasks;
@@ -282,6 +451,7 @@ export class SqliteAdapter implements IDatabaseAdapter {
     const logDetails = `AI moved [${taskId}] "${task.title}" from [${fromName}] → [${toName}]${reason ? `. Rationale: ${reason}` : ''}`;
 
     await this.logActivity({
+      session_id: task.session_id,
       task_id: taskId,
       action_type: 'TASK_MOVED',
       from_status: oldStatusId,
@@ -318,6 +488,7 @@ export class SqliteAdapter implements IDatabaseAdapter {
 
     const updated = (await this.getTaskById(taskId))!;
     await this.logActivity({
+      session_id: task.session_id,
       task_id: taskId,
       action_type: 'TASK_UPDATED',
       details: `AI updated details for [${taskId}] "${updated.title}"`,
@@ -327,25 +498,33 @@ export class SqliteAdapter implements IDatabaseAdapter {
     return updated;
   }
 
+  // Activity Logs
   public async logActivity(log: Omit<ActivityLog, 'id' | 'timestamp'>): Promise<void> {
     const id = `log-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const timestamp = new Date().toISOString();
 
     const stmt = this.db.prepare(`
-      INSERT INTO activity_logs (id, task_id, action_type, details, from_status, to_status, reason, timestamp)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO activity_logs (id, session_id, task_id, action_type, details, from_status, to_status, reason, timestamp)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
-    stmt.run(id, log.task_id || null, log.action_type, log.details, log.from_status || null, log.to_status || null, log.reason || null, timestamp);
+    stmt.run(id, log.session_id || null, log.task_id || null, log.action_type, log.details, log.from_status || null, log.to_status || null, log.reason || null, timestamp);
 
     const fullLog: ActivityLog = { id, timestamp, ...log };
     this.notify('LOG_ADDED', fullLog);
   }
 
-  public async getActivityLogs(limit = 50): Promise<ActivityLog[]> {
-    const rows = this.db.prepare(`SELECT * FROM activity_logs ORDER BY timestamp DESC LIMIT ?`).all(limit) as any[];
+  public async getActivityLogs(limit = 50, sessionId?: string): Promise<ActivityLog[]> {
+    let rows: any[];
+    if (sessionId && sessionId !== 'all') {
+      rows = this.db.prepare(`SELECT * FROM activity_logs WHERE session_id = ? ORDER BY timestamp DESC LIMIT ?`).all(sessionId, limit) as any[];
+    } else {
+      rows = this.db.prepare(`SELECT * FROM activity_logs ORDER BY timestamp DESC LIMIT ?`).all(limit) as any[];
+    }
+
     return rows.map((r) => ({
       id: r.id,
+      session_id: r.session_id || undefined,
       task_id: r.task_id || undefined,
       action_type: r.action_type,
       details: r.details,

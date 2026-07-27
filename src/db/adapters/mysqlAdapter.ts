@@ -1,5 +1,5 @@
 import mysql from 'mysql2/promise';
-import { IDatabaseAdapter, Workflow, Task, ActivityLog, Status, EventListener } from '../types.js';
+import { IDatabaseAdapter, Workflow, Task, ActivityLog, Status, Session, EventListener } from '../types.js';
 
 export class MysqlAdapter implements IDatabaseAdapter {
   private pool!: mysql.Pool;
@@ -50,8 +50,23 @@ export class MysqlAdapter implements IDatabaseAdapter {
     `);
 
     await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS sessions (
+        id VARCHAR(64) PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        description TEXT NOT NULL,
+        agent_id VARCHAR(128),
+        status VARCHAR(32) NOT NULL DEFAULT 'active',
+        workflow_id VARCHAR(64) NOT NULL,
+        created_at VARCHAR(64) NOT NULL,
+        updated_at VARCHAR(64) NOT NULL,
+        FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE CASCADE
+      );
+    `);
+
+    await this.pool.query(`
       CREATE TABLE IF NOT EXISTS tasks (
         id VARCHAR(64) PRIMARY KEY,
+        session_id VARCHAR(64) NOT NULL,
         workflow_id VARCHAR(64) NOT NULL,
         title VARCHAR(255) NOT NULL,
         description TEXT NOT NULL,
@@ -61,6 +76,7 @@ export class MysqlAdapter implements IDatabaseAdapter {
         metadata_json JSON NOT NULL,
         created_at VARCHAR(64) NOT NULL,
         updated_at VARCHAR(64) NOT NULL,
+        FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
         FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE CASCADE
       );
     `);
@@ -68,6 +84,7 @@ export class MysqlAdapter implements IDatabaseAdapter {
     await this.pool.query(`
       CREATE TABLE IF NOT EXISTS activity_logs (
         id VARCHAR(64) PRIMARY KEY,
+        session_id VARCHAR(64),
         task_id VARCHAR(64),
         action_type VARCHAR(64) NOT NULL,
         details TEXT NOT NULL,
@@ -80,24 +97,144 @@ export class MysqlAdapter implements IDatabaseAdapter {
   }
 
   private async seedDefaultIfEmpty() {
-    const [rows]: any = await this.pool.query(`SELECT count(*) as cnt FROM workflows`);
-    const count = parseInt(rows[0].cnt);
-    if (count === 0) {
+    const [rowsWf]: any = await this.pool.query(`SELECT count(*) as cnt FROM workflows`);
+    let defaultWfId = 'wf-default';
+    if (parseInt(rowsWf[0].cnt) === 0) {
       const defaultStatuses: Status[] = [
         { id: 'waiting', name: 'Waiting', color: '#3b82f6', order: 1, description: 'Tasks queued awaiting AI execution' },
         { id: 'in_progress', name: 'In Progress', color: '#f59e0b', order: 2, description: 'Tasks actively being developed by AI' },
         { id: 'done', name: 'Done', color: '#10b981', order: 3, description: 'Completed and verified deliverables' },
       ];
+      const now = new Date().toISOString();
+      await this.pool.query(
+        `INSERT INTO workflows (id, name, description, statuses_json, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+        [defaultWfId, 'Default Standard Workflow', 'Initial baseline workflow', JSON.stringify(defaultStatuses), 1, now]
+      );
+    } else {
+      const [activeWfRows]: any = await this.pool.query(`SELECT id FROM workflows WHERE is_active = 1 LIMIT 1`);
+      if (activeWfRows.length > 0) defaultWfId = activeWfRows[0].id;
+    }
 
-      await this.createWorkflow(
-        'Default Standard Workflow',
-        'Initial baseline workflow with Waiting -> In Progress -> Done',
-        defaultStatuses,
-        true
+    const [rowsSess]: any = await this.pool.query(`SELECT count(*) as cnt FROM sessions`);
+    if (parseInt(rowsSess[0].cnt) === 0) {
+      const now = new Date().toISOString();
+      await this.pool.query(
+        `INSERT INTO sessions (id, name, description, agent_id, status, workflow_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        ['sess-default', 'Primary Agent Session', 'Default execution session', 'Primary-Agent', 'active', defaultWfId, now, now]
       );
     }
   }
 
+  // Session management
+  public async getSessions(status?: string): Promise<Session[]> {
+    let rows: any[];
+    if (status) {
+      const [res]: any = await this.pool.query(`SELECT * FROM sessions WHERE status = ? ORDER BY updated_at DESC`, [status]);
+      rows = res;
+    } else {
+      const [res]: any = await this.pool.query(`SELECT * FROM sessions ORDER BY updated_at DESC`);
+      rows = res;
+    }
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      description: r.description,
+      agent_id: r.agent_id || undefined,
+      status: r.status as Session['status'],
+      workflow_id: r.workflow_id,
+      created_at: r.created_at,
+      updated_at: r.updated_at,
+    }));
+  }
+
+  public async getSessionById(sessionId: string): Promise<Session | null> {
+    const [rows]: any = await this.pool.query(`SELECT * FROM sessions WHERE id = ?`, [sessionId]);
+    if (rows.length === 0) return null;
+    const r = rows[0];
+    return {
+      id: r.id,
+      name: r.name,
+      description: r.description,
+      agent_id: r.agent_id || undefined,
+      status: r.status as Session['status'],
+      workflow_id: r.workflow_id,
+      created_at: r.created_at,
+      updated_at: r.updated_at,
+    };
+  }
+
+  public async getActiveSession(): Promise<Session> {
+    let [rows]: any = await this.pool.query(`SELECT * FROM sessions WHERE status = 'active' ORDER BY updated_at DESC LIMIT 1`);
+    if (rows.length === 0) {
+      [rows] = await this.pool.query(`SELECT * FROM sessions ORDER BY updated_at DESC LIMIT 1`);
+    }
+    if (rows.length === 0) {
+      const activeWf = await this.getActiveWorkflow();
+      return this.createSession('New Agent Session', 'Autonomous session container', 'Agent-1', activeWf.id);
+    }
+    const r = rows[0];
+    return {
+      id: r.id,
+      name: r.name,
+      description: r.description,
+      agent_id: r.agent_id || undefined,
+      status: r.status as Session['status'],
+      workflow_id: r.workflow_id,
+      created_at: r.created_at,
+      updated_at: r.updated_at,
+    };
+  }
+
+  public async createSession(name: string, description: string, agentId?: string, workflowId?: string): Promise<Session> {
+    const id = `sess-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const targetWf = workflowId || (await this.getActiveWorkflow()).id;
+    const now = new Date().toISOString();
+
+    await this.pool.query(
+      `INSERT INTO sessions (id, name, description, agent_id, status, workflow_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, name, description, agentId || null, 'active', targetWf, now, now]
+    );
+
+    const session: Session = {
+      id,
+      name,
+      description,
+      agent_id: agentId,
+      status: 'active',
+      workflow_id: targetWf,
+      created_at: now,
+      updated_at: now,
+    };
+
+    await this.logActivity({
+      session_id: id,
+      action_type: 'SESSION_CREATED',
+      details: `Created new execution session "${name}"${agentId ? ` for agent [${agentId}]` : ''}`,
+    });
+
+    this.notify('SESSION_CREATED', session);
+    return session;
+  }
+
+  public async updateSessionStatus(sessionId: string, status: Session['status']): Promise<Session> {
+    const session = await this.getSessionById(sessionId);
+    if (!session) throw new Error(`Session with ID ${sessionId} not found`);
+
+    const now = new Date().toISOString();
+    await this.pool.query(`UPDATE sessions SET status = ?, updated_at = ? WHERE id = ?`, [status, now, sessionId]);
+
+    const updatedSession: Session = { ...session, status, updated_at: now };
+    await this.logActivity({
+      session_id: sessionId,
+      action_type: 'SESSION_UPDATED',
+      details: `Updated session "${session.name}" status to [${status}]`,
+    });
+
+    this.notify('SESSION_UPDATED', updatedSession);
+    return updatedSession;
+  }
+
+  // Workflows
   public async getWorkflows(): Promise<Workflow[]> {
     const [rows]: any = await this.pool.query(`SELECT * FROM workflows ORDER BY created_at DESC`);
     return rows.map((r: any) => ({
@@ -135,15 +272,14 @@ export class MysqlAdapter implements IDatabaseAdapter {
     }
 
     await this.pool.query(
-      `INSERT INTO workflows (id, name, description, statuses_json, is_active, created_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO workflows (id, name, description, statuses_json, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
       [id, name, description, JSON.stringify(statuses), setActive ? 1 : 0, created_at]
     );
 
     const newWf: Workflow = { id, name, description, statuses, is_active: setActive, created_at };
     await this.logActivity({
       action_type: 'WORKFLOW_CREATED',
-      details: `Generated new workflow "${name}" with ${statuses.length} status steps (${statuses.map((s) => s.name).join(' → ')})`,
+      details: `Generated new workflow "${name}" with ${statuses.length} status steps`,
     });
 
     this.notify('WORKFLOW_UPDATED', newWf);
@@ -152,9 +288,7 @@ export class MysqlAdapter implements IDatabaseAdapter {
 
   public async setActiveWorkflow(workflowId: string): Promise<Workflow> {
     const [rows]: any = await this.pool.query(`SELECT * FROM workflows WHERE id = ?`, [workflowId]);
-    if (rows.length === 0) {
-      throw new Error(`Workflow with ID ${workflowId} not found`);
-    }
+    if (rows.length === 0) throw new Error(`Workflow with ID ${workflowId} not found`);
 
     await this.pool.query(`UPDATE workflows SET is_active = 0`);
     await this.pool.query(`UPDATE workflows SET is_active = 1 WHERE id = ?`, [workflowId]);
@@ -168,11 +302,23 @@ export class MysqlAdapter implements IDatabaseAdapter {
     return activeWf;
   }
 
-  public async getTasks(workflowId?: string): Promise<Task[]> {
-    const targetWf = workflowId || (await this.getActiveWorkflow()).id;
-    const [rows]: any = await this.pool.query(`SELECT * FROM tasks WHERE workflow_id = ? ORDER BY created_at DESC`, [targetWf]);
-    return rows.map((r: any) => ({
+  // Tasks
+  public async getTasks(workflowId?: string, sessionId?: string): Promise<Task[]> {
+    let rows: any[];
+    if (sessionId && sessionId !== 'all') {
+      const [res]: any = await this.pool.query(`SELECT * FROM tasks WHERE session_id = ? ORDER BY created_at DESC`, [sessionId]);
+      rows = res;
+    } else if (workflowId) {
+      const [res]: any = await this.pool.query(`SELECT * FROM tasks WHERE workflow_id = ? ORDER BY created_at DESC`, [workflowId]);
+      rows = res;
+    } else {
+      const [res]: any = await this.pool.query(`SELECT * FROM tasks ORDER BY created_at DESC`);
+      rows = res;
+    }
+
+    return rows.map((r) => ({
       id: r.id,
+      session_id: r.session_id,
       workflow_id: r.workflow_id,
       title: r.title,
       description: r.description,
@@ -191,6 +337,7 @@ export class MysqlAdapter implements IDatabaseAdapter {
     const r = rows[0];
     return {
       id: r.id,
+      session_id: r.session_id,
       workflow_id: r.workflow_id,
       title: r.title,
       description: r.description,
@@ -205,7 +352,7 @@ export class MysqlAdapter implements IDatabaseAdapter {
 
   private async getNextTaskId(): Promise<string> {
     const [rows]: any = await this.pool.query(`SELECT count(*) as total FROM tasks`);
-    const num = parseInt(rows[0].total) + 101;
+    const num = parseInt(rows[0].total || '0') + 101;
     return `GIRA-${num}`;
   }
 
@@ -215,11 +362,12 @@ export class MysqlAdapter implements IDatabaseAdapter {
     statusId?: string,
     priority: Task['priority'] = 'medium',
     tags: string[] = [],
-    metadata: Record<string, any> = {}
+    metadata: Record<string, any> = {},
+    sessionId?: string
   ): Promise<Task> {
+    const targetSession = sessionId ? (await this.getSessionById(sessionId)) || (await this.getActiveSession()) : await this.getActiveSession();
     const activeWf = await this.getActiveWorkflow();
     const targetStatus = statusId || activeWf.statuses[0]?.id || 'waiting';
-
     const validStatus = activeWf.statuses.find((s) => s.id === targetStatus);
     const finalStatusId = validStatus ? validStatus.id : activeWf.statuses[0].id;
 
@@ -227,13 +375,14 @@ export class MysqlAdapter implements IDatabaseAdapter {
     const now = new Date().toISOString();
 
     await this.pool.query(
-      `INSERT INTO tasks (id, workflow_id, title, description, status_id, priority, tags_json, metadata_json, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, activeWf.id, title, description, finalStatusId, priority, JSON.stringify(tags), JSON.stringify(metadata), now, now]
+      `INSERT INTO tasks (id, session_id, workflow_id, title, description, status_id, priority, tags_json, metadata_json, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, targetSession.id, activeWf.id, title, description, finalStatusId, priority, JSON.stringify(tags), JSON.stringify(metadata), now, now]
     );
 
     const newTask: Task = {
       id,
+      session_id: targetSession.id,
       workflow_id: activeWf.id,
       title,
       description,
@@ -245,12 +394,12 @@ export class MysqlAdapter implements IDatabaseAdapter {
       updated_at: now,
     };
 
-    const statusName = validStatus ? validStatus.name : finalStatusId;
     await this.logActivity({
+      session_id: targetSession.id,
       task_id: id,
       action_type: 'TASK_CREATED',
       to_status: finalStatusId,
-      details: `Added task [${id}] "${title}" to column [${statusName}]`,
+      details: `Added task [${id}] "${title}"`,
     });
 
     this.notify('TASK_UPDATED', newTask);
@@ -258,11 +407,13 @@ export class MysqlAdapter implements IDatabaseAdapter {
   }
 
   public async batchCreateTasks(
-    tasksInput: Array<{ title: string; description: string; status_id?: string; priority?: Task['priority']; tags?: string[] }>
+    tasksInput: Array<{ title: string; description: string; status_id?: string; priority?: Task['priority']; tags?: string[]; session_id?: string }>,
+    sessionId?: string
   ): Promise<Task[]> {
     const createdTasks: Task[] = [];
     for (const t of tasksInput) {
-      const created = await this.createTask(t.title, t.description, t.status_id, t.priority || 'medium', t.tags || []);
+      const targetSessId = t.session_id || sessionId;
+      const created = await this.createTask(t.title, t.description, t.status_id, t.priority || 'medium', t.tags || [], {}, targetSessId);
       createdTasks.push(created);
     }
     return createdTasks;
@@ -270,35 +421,20 @@ export class MysqlAdapter implements IDatabaseAdapter {
 
   public async moveTask(taskId: string, newStatusId: string, reason?: string): Promise<Task> {
     const task = await this.getTaskById(taskId);
-    if (!task) {
-      throw new Error(`Task with ID ${taskId} not found`);
-    }
-
-    const activeWf = await this.getActiveWorkflow();
-    const statusDef = activeWf.statuses.find((s) => s.id === newStatusId);
-    if (!statusDef) {
-      throw new Error(`Status ${newStatusId} does not exist in active workflow ${activeWf.name}`);
-    }
-
-    const oldStatusId = task.status_id;
-    const oldStatusDef = activeWf.statuses.find((s) => s.id === oldStatusId);
+    if (!task) throw new Error(`Task with ID ${taskId} not found`);
 
     const now = new Date().toISOString();
     await this.pool.query(`UPDATE tasks SET status_id = ?, updated_at = ? WHERE id = ?`, [newStatusId, now, taskId]);
 
     const updatedTask = { ...task, status_id: newStatusId, updated_at: now };
-
-    const fromName = oldStatusDef ? oldStatusDef.name : oldStatusId;
-    const toName = statusDef.name;
-    const logDetails = `AI moved [${taskId}] "${task.title}" from [${fromName}] → [${toName}]${reason ? `. Rationale: ${reason}` : ''}`;
-
     await this.logActivity({
+      session_id: task.session_id,
       task_id: taskId,
       action_type: 'TASK_MOVED',
-      from_status: oldStatusId,
+      from_status: task.status_id,
       to_status: newStatusId,
       reason,
-      details: logDetails,
+      details: `AI moved [${taskId}] "${task.title}" → [${newStatusId}]`,
     });
 
     this.notify('TASK_MOVED', updatedTask);
@@ -310,9 +446,7 @@ export class MysqlAdapter implements IDatabaseAdapter {
     updates: Partial<Pick<Task, 'title' | 'description' | 'priority' | 'tags' | 'metadata'>>
   ): Promise<Task> {
     const task = await this.getTaskById(taskId);
-    if (!task) {
-      throw new Error(`Task with ID ${taskId} not found`);
-    }
+    if (!task) throw new Error(`Task with ID ${taskId} not found`);
 
     const newTitle = updates.title ?? task.title;
     const newDesc = updates.description ?? task.description;
@@ -322,14 +456,13 @@ export class MysqlAdapter implements IDatabaseAdapter {
     const now = new Date().toISOString();
 
     await this.pool.query(
-      `UPDATE tasks
-       SET title = ?, description = ?, priority = ?, tags_json = ?, metadata_json = ?, updated_at = ?
-       WHERE id = ?`,
+      `UPDATE tasks SET title = ?, description = ?, priority = ?, tags_json = ?, metadata_json = ?, updated_at = ? WHERE id = ?`,
       [newTitle, newDesc, newPriority, JSON.stringify(newTags), JSON.stringify(newMeta), now, taskId]
     );
 
     const updated = (await this.getTaskById(taskId))!;
     await this.logActivity({
+      session_id: task.session_id,
       task_id: taskId,
       action_type: 'TASK_UPDATED',
       details: `AI updated details for [${taskId}] "${updated.title}"`,
@@ -339,24 +472,33 @@ export class MysqlAdapter implements IDatabaseAdapter {
     return updated;
   }
 
+  // Activity logs
   public async logActivity(log: Omit<ActivityLog, 'id' | 'timestamp'>): Promise<void> {
     const id = `log-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const timestamp = new Date().toISOString();
 
     await this.pool.query(
-      `INSERT INTO activity_logs (id, task_id, action_type, details, from_status, to_status, reason, timestamp)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, log.task_id || null, log.action_type, log.details, log.from_status || null, log.to_status || null, log.reason || null, timestamp]
+      `INSERT INTO activity_logs (id, session_id, task_id, action_type, details, from_status, to_status, reason, timestamp)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, log.session_id || null, log.task_id || null, log.action_type, log.details, log.from_status || null, log.to_status || null, log.reason || null, timestamp]
     );
 
     const fullLog: ActivityLog = { id, timestamp, ...log };
     this.notify('LOG_ADDED', fullLog);
   }
 
-  public async getActivityLogs(limit = 50): Promise<ActivityLog[]> {
-    const [rows]: any = await this.pool.query(`SELECT * FROM activity_logs ORDER BY timestamp DESC LIMIT ?`, [limit]);
-    return rows.map((r: any) => ({
+  public async getActivityLogs(limit = 50, sessionId?: string): Promise<ActivityLog[]> {
+    let rows: any[];
+    if (sessionId && sessionId !== 'all') {
+      const [res]: any = await this.pool.query(`SELECT * FROM activity_logs WHERE session_id = ? ORDER BY timestamp DESC LIMIT ?`, [sessionId, limit]);
+      rows = res;
+    } else {
+      const [res]: any = await this.pool.query(`SELECT * FROM activity_logs ORDER BY timestamp DESC LIMIT ?`, [limit]);
+      rows = res;
+    }
+    return rows.map((r) => ({
       id: r.id,
+      session_id: r.session_id || undefined,
       task_id: r.task_id || undefined,
       action_type: r.action_type,
       details: r.details,
