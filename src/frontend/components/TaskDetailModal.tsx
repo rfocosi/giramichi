@@ -7,9 +7,10 @@ interface TaskDetailModalProps {
   statuses: Status[];
   logs: ActivityLog[];
   onClose: () => void;
+  onTagClick?: (tag: string) => void;
 }
 
-export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, statuses, logs, onClose }) => {
+export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, statuses, logs, onClose, onTagClick }) => {
   if (!task) return null;
 
   const currentStatus = statuses.find((s) => s.id === task.status_id);
@@ -81,7 +82,20 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, statuses
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <TagIcon size={14} />
               {task.tags.map((t, idx) => (
-                <span key={idx} className="tag-badge">#{t}</span>
+                <span
+                  key={idx}
+                  className="tag-badge interactive-tag"
+                  style={{ cursor: onTagClick ? 'pointer' : 'default' }}
+                  onClick={() => {
+                    if (onTagClick) {
+                      onTagClick(t);
+                      onClose();
+                    }
+                  }}
+                  title={onTagClick ? `Filter board by tag #${t}` : undefined}
+                >
+                  #{t}
+                </span>
               ))}
             </div>
           )}

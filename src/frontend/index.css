@@ -248,6 +248,19 @@ body {
   font-size: 0.7rem;
   padding: 2px 8px;
   border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.tag-badge.interactive-tag:hover {
+  background: rgba(99, 102, 241, 0.2);
+  border-color: rgba(99, 102, 241, 0.5);
+  color: #a5b4fc;
+}
+
+.tag-chip:hover {
+  transform: translateY(-1px);
+  border-color: rgba(99, 102, 241, 0.4) !important;
+  color: #ffffff !important;
 }
 
 .priority-badge {

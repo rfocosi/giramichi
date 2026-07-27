@@ -6,9 +6,10 @@ interface TaskCardProps {
   task: Task;
   isNextTask?: boolean;
   onClick: (task: Task) => void;
+  onTagClick?: (tag: string) => void;
 }
 
-export const TaskCard: React.FC<TaskCardProps> = ({ task, isNextTask, onClick }) => {
+export const TaskCard: React.FC<TaskCardProps> = ({ task, isNextTask, onClick, onTagClick }) => {
   const getPriorityClass = (priority: Task['priority']) => {
     switch (priority) {
       case 'urgent':
@@ -87,7 +88,17 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, isNextTask, onClick })
       {task.tags && task.tags.length > 0 && (
         <div className="task-tags">
           {task.tags.map((t, idx) => (
-            <span key={idx} className="tag-badge">
+            <span
+              key={idx}
+              className="tag-badge interactive-tag"
+              onClick={(e) => {
+                if (onTagClick) {
+                  e.stopPropagation();
+                  onTagClick(t);
+                }
+              }}
+              title={`Filter by tag #${t}`}
+            >
               #{t}
             </span>
           ))}
