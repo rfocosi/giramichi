@@ -7,9 +7,10 @@ interface KanbanBoardProps {
   statuses: Status[];
   tasks: Task[];
   onTaskClick: (task: Task) => void;
+  onTagClick?: (tag: string) => void;
 }
 
-export const KanbanBoard: React.FC<KanbanBoardProps> = ({ statuses, tasks, onTaskClick }) => {
+export const KanbanBoard: React.FC<KanbanBoardProps> = ({ statuses, tasks, onTaskClick, onTagClick }) => {
   const getStatusIcon = (statusId: string, color: string) => {
     switch (statusId.toLowerCase()) {
       case 'waiting':
@@ -90,6 +91,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ statuses, tasks, onTas
                     task={task}
                     isNextTask={task.id === nextTaskId}
                     onClick={onTaskClick}
+                    onTagClick={onTagClick}
                   />
                 ))
               )}

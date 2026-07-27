@@ -4,6 +4,7 @@ import { WorkflowHeader } from './components/WorkflowHeader.js';
 import { KanbanBoard } from './components/KanbanBoard.js';
 import { ActivityLogStream } from './components/ActivityLogStream.js';
 import { TaskDetailModal } from './components/TaskDetailModal.js';
+import { TagFilterBar } from './components/TagFilterBar.js';
 
 export const App: React.FC = () => {
   const [workflow, setWorkflow] = useState<Workflow | null>(null);
@@ -15,6 +16,10 @@ export const App: React.FC = () => {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isSimulating, setIsSimulating] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  // Tag Filtering State
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [tagMatchMode, setTagMatchMode] = useState<'OR' | 'AND'>('OR');
 
   // Fetch sessions list
   const fetchSessions = async () => {
@@ -111,6 +116,44 @@ export const App: React.FC = () => {
     setSelectedSessionId(sessionId);
     fetchBoard(sessionId);
   };
+
+  const handleToggleTag = (tag: string) => {
+    setSelectedTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+    );
+  };
+
+  const handleClearTags = () => {
+    setSelectedTags([]);
+  };
+
+  const handleToggleMatchMode = () => {
+    setTagMatchMode((prev) => (prev === 'OR' ? 'AND' : 'OR'));
+  };
+
+  // Compute available tags with frequency count
+  const tagCountsMap = new Map<string, number>();
+  tasks.forEach((task) => {
+    if (Array.isArray(task.tags)) {
+      task.tags.forEach((tag) => {
+        tagCountsMap.set(tag, (tagCountsMap.get(tag) || 0) + 1);
+      });
+    }
+  });
+
+  const availableTags = Array.from(tagCountsMap.entries())
+    .map(([tag, count]) => ({ tag, count }))
+    .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
+
+  // Compute filtered tasks list based on selected tags and match mode
+  const filteredTasks = tasks.filter((task) => {
+    if (selectedTags.length === 0) return true;
+    const taskTags = task.tags || [];
+    if (tagMatchMode === 'AND') {
+      return selectedTags.every((t) => taskTags.includes(t));
+    }
+    return selectedTags.some((t) => taskTags.includes(t));
+  });
 
   // Run a multi-agent simulation demo over MCP
   const handleTriggerSim = async () => {
@@ -270,12 +313,24 @@ export const App: React.FC = () => {
         isSimulating={isSimulating}
       />
 
+      <TagFilterBar
+        availableTags={availableTags}
+        selectedTags={selectedTags}
+        onToggleTag={handleToggleTag}
+        onClearTags={handleClearTags}
+        matchMode={tagMatchMode}
+        onToggleMatchMode={handleToggleMatchMode}
+        totalFilteredCount={filteredTasks.length}
+        totalCount={tasks.length}
+      />
+
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '24px' }}>
         <div>
           <KanbanBoard
             statuses={workflow.statuses}
-            tasks={tasks}
+            tasks={filteredTasks}
             onTaskClick={(task) => setSelectedTask(task)}
+            onTagClick={handleToggleTag}
           />
         </div>
 
@@ -289,6 +344,7 @@ export const App: React.FC = () => {
         statuses={workflow.statuses}
         logs={logs}
         onClose={() => setSelectedTask(null)}
+        onTagClick={handleToggleTag}
       />
     </div>
   );
