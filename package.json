@@ -1,7 +1,7 @@
 {
   "name": "giramichi",
   "version": "1.0.0",
-  "description": "Giramichi - AI-Guided Jira Replacement with MCP and Read-Only Dashboard",
+  "description": "Giramichi - AI-Guided Task Engine with MCP and Read-Only Dashboard",
   "type": "module",
   "scripts": {
     "dev": "vite",
