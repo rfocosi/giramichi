@@ -100,12 +100,15 @@ npm install
 
 ### Running the Services
 
-#### 1. Start the Express API & SSE Server
+#### 1. Start the Express API & HTTP MCP Server
 
 ```bash
 npm run server
 ```
-Runs the Express backend on `http://localhost:3001` with API endpoints and the live `/api/events` SSE stream.
+Runs the Express backend on `http://localhost:3001` with:
+- Dashboard REST API & live `/api/events` SSE stream
+- **MCP Streamable HTTP Endpoint**: `http://localhost:3001/mcp`
+- **MCP SSE Stream Endpoint**: `http://localhost:3001/mcp/sse`
 
 #### 2. Start the Frontend Dashboard
 
@@ -116,13 +119,17 @@ npm run dev
 ```
 Launches the Vite development server (typically at `http://localhost:5173`). Open your browser to view the real-time Kanban board.
 
-#### 3. Run the Standalone MCP Server
+#### 3. Run the Standalone MCP Server (Stdio or HTTP)
 
-To run the MCP stdio server directly:
-
-```bash
-npm run mcp
-```
+- **Stdio Transport Mode**:
+  ```bash
+  npm run mcp
+  ```
+- **Standalone HTTP Transport Mode**:
+  ```bash
+  npm run mcp:http
+  ```
+  Runs a standalone HTTP MCP server on `http://localhost:3002`.
 
 #### 4. Run the Interactive AI Simulation Demo
 
@@ -137,9 +144,11 @@ This script programmatically creates a custom workflow, batch-adds tasks, transi
 
 ## 🔌 Integrating with MCP Clients
 
-You can connect Giramichi to any MCP-compliant application (such as Claude Desktop, Cursor, Antigravity IDE, or custom agent frameworks).
+You can connect Giramichi to any MCP-compliant application (Claude Desktop, Claude Code CLI, OpenCode, GitHub Copilot, Cursor, Windsurf, Google Antigravity IDE, Cline, Zed, etc.).
 
-### Claude Desktop Configuration Example
+For complete step-by-step setup guides and configuration snippets for all major AI development interfaces, see [**MCP.md**](MCP.md).
+
+### Quick Configuration Example (Claude Desktop)
 
 Add Giramichi to your `claude_desktop_config.json`:
 
@@ -147,8 +156,8 @@ Add Giramichi to your `claude_desktop_config.json`:
 {
   "mcpServers": {
     "giramichi": {
-      "command": "npx",
-      "args": ["-y", "tsx", "/path/to/giramichi/src/mcp/mcpServer.ts"],
+      "command": "npm",
+      "args": ["run", "mcp"],
       "cwd": "/path/to/giramichi"
     }
   }

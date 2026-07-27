@@ -3,7 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { toolDefinitions, handleToolCall } from './tools.js';
 
-async function runMCPServer() {
+export function createMCPServer(): Server {
   const server = new Server(
     {
       name: 'giramichi-mcp-server',
@@ -29,12 +29,21 @@ async function runMCPServer() {
     return await handleToolCall(name, args || {});
   });
 
+  return server;
+}
+
+async function runMCPServer() {
+  const server = createMCPServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error('[Giramichi MCP Server] Connected over Stdio');
 }
 
-runMCPServer().catch((err) => {
-  console.error('[Giramichi MCP Server Error]', err);
-  process.exit(1);
-});
+// Only run automatically if executed directly as entrypoint
+if (process.argv[1] && (process.argv[1].endsWith('mcpServer.ts') || process.argv[1].endsWith('mcpServer.js'))) {
+  runMCPServer().catch((err) => {
+    console.error('[Giramichi MCP Server Error]', err);
+    process.exit(1);
+  });
+}
+

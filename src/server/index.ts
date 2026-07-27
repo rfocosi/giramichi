@@ -2,12 +2,18 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import { db } from '../db/index.js';
 import { handleToolCall } from '../mcp/tools.js';
+import { createHttpMcpRouter } from '../mcp/httpMcpServer.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
 app.use(cors());
 app.use(express.json());
+
+// Mount HTTP MCP Protocol endpoints
+const httpMcpRouter = createHttpMcpRouter();
+app.use('/mcp', httpMcpRouter);
+app.use('/api/mcp', httpMcpRouter);
 
 // List of connected SSE clients
 const sseClients: Response[] = [];
@@ -106,5 +112,8 @@ app.post('/api/mcp-direct', async (req: Request, res: Response) => {
 
 app.listen(PORT, () => {
   console.log(`[Giramichi Server] Running on http://localhost:${PORT}`);
-  console.log(`[Giramichi Server] Real-time SSE stream at http://localhost:${PORT}/api/events`);
+  console.log(`[Giramichi Server] MCP Streamable HTTP endpoint: http://localhost:${PORT}/mcp`);
+  console.log(`[Giramichi Server] MCP SSE Stream endpoint:      http://localhost:${PORT}/mcp/sse`);
+  console.log(`[Giramichi Server] Real-time SSE stream at       http://localhost:${PORT}/api/events`);
 });
+
