@@ -1,4 +1,4 @@
-import { db, Status, Task } from '../db/db.js';
+import { db } from '../db/index.js';
 
 export const toolDefinitions = [
   {
@@ -130,7 +130,7 @@ export async function handleToolCall(name: string, args: any) {
   try {
     switch (name) {
       case 'giramichi_create_workflow': {
-        const wf = db.createWorkflow(args.name, args.description, args.statuses, true);
+        const wf = await db.createWorkflow(args.name, args.description, args.statuses, true);
         return {
           content: [
             {
@@ -142,7 +142,7 @@ export async function handleToolCall(name: string, args: any) {
       }
 
       case 'giramichi_set_active_workflow': {
-        const wf = db.setActiveWorkflow(args.workflow_id);
+        const wf = await db.setActiveWorkflow(args.workflow_id);
         return {
           content: [
             {
@@ -154,7 +154,7 @@ export async function handleToolCall(name: string, args: any) {
       }
 
       case 'giramichi_create_task': {
-        const task = db.createTask(args.title, args.description, args.status_id, args.priority, args.tags);
+        const task = await db.createTask(args.title, args.description, args.status_id, args.priority, args.tags);
         return {
           content: [
             {
@@ -166,7 +166,7 @@ export async function handleToolCall(name: string, args: any) {
       }
 
       case 'giramichi_batch_create_tasks': {
-        const created = db.batchCreateTasks(args.tasks);
+        const created = await db.batchCreateTasks(args.tasks);
         return {
           content: [
             {
@@ -178,7 +178,7 @@ export async function handleToolCall(name: string, args: any) {
       }
 
       case 'giramichi_move_task': {
-        const task = db.moveTask(args.task_id, args.new_status_id, args.reason);
+        const task = await db.moveTask(args.task_id, args.new_status_id, args.reason);
         return {
           content: [
             {
@@ -190,7 +190,7 @@ export async function handleToolCall(name: string, args: any) {
       }
 
       case 'giramichi_update_task': {
-        const task = db.updateTask(args.task_id, {
+        const task = await db.updateTask(args.task_id, {
           title: args.title,
           description: args.description,
           priority: args.priority,
@@ -207,9 +207,9 @@ export async function handleToolCall(name: string, args: any) {
       }
 
       case 'giramichi_get_board': {
-        const workflow = db.getActiveWorkflow();
-        const tasks = db.getTasks(workflow.id);
-        const logs = db.getActivityLogs(10);
+        const workflow = await db.getActiveWorkflow();
+        const tasks = await db.getTasks(workflow.id);
+        const logs = await db.getActivityLogs(10);
         return {
           content: [
             {
@@ -221,7 +221,7 @@ export async function handleToolCall(name: string, args: any) {
       }
 
       case 'giramichi_get_activity_log': {
-        const logs = db.getActivityLogs(args.limit || 50);
+        const logs = await db.getActivityLogs(args.limit || 50);
         return {
           content: [
             {

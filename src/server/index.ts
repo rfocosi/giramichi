@@ -1,6 +1,6 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
-import { db } from '../db/db.js';
+import { db } from '../db/index.js';
 import { handleToolCall } from '../mcp/tools.js';
 
 const app = express();
@@ -43,11 +43,11 @@ app.get('/api/events', (req: Request, res: Response) => {
 });
 
 // Read-only Board API
-app.get('/api/board', (req: Request, res: Response) => {
+app.get('/api/board', async (req: Request, res: Response) => {
   try {
-    const workflow = db.getActiveWorkflow();
-    const tasks = db.getTasks(workflow.id);
-    const logs = db.getActivityLogs(20);
+    const workflow = await db.getActiveWorkflow();
+    const tasks = await db.getTasks(workflow.id);
+    const logs = await db.getActivityLogs(20);
     res.json({ success: true, workflow, tasks, logs });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -55,9 +55,9 @@ app.get('/api/board', (req: Request, res: Response) => {
 });
 
 // Read-only Workflows API
-app.get('/api/workflows', (req: Request, res: Response) => {
+app.get('/api/workflows', async (req: Request, res: Response) => {
   try {
-    const workflows = db.getWorkflows();
+    const workflows = await db.getWorkflows();
     res.json({ success: true, workflows });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -65,14 +65,14 @@ app.get('/api/workflows', (req: Request, res: Response) => {
 });
 
 // Read-only Task Detail API
-app.get('/api/tasks/:id', (req: Request, res: Response) => {
+app.get('/api/tasks/:id', async (req: Request, res: Response) => {
   try {
     const taskId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-    const task = db.getTaskById(taskId);
+    const task = await db.getTaskById(taskId);
     if (!task) {
       return res.status(404).json({ success: false, error: 'Task not found' });
     }
-    const logs = db.getActivityLogs(100).filter((l) => l.task_id === taskId);
+    const logs = (await db.getActivityLogs(100)).filter((l) => l.task_id === taskId);
     res.json({ success: true, task, logs });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -80,10 +80,10 @@ app.get('/api/tasks/:id', (req: Request, res: Response) => {
 });
 
 // Read-only Activity Logs API
-app.get('/api/activity', (req: Request, res: Response) => {
+app.get('/api/activity', async (req: Request, res: Response) => {
   try {
     const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
-    const logs = db.getActivityLogs(limit);
+    const logs = await db.getActivityLogs(limit);
     res.json({ success: true, logs });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
