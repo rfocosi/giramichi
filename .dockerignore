@@ -1,0 +1,15 @@
+node_modules
+dist
+.git
+.gitignore
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+Dockerfile*
+docker-compose*.yml
+.env
+.env.example
+npm-debug.log
+README.md
+docs

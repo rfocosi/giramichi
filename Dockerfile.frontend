@@ -1,0 +1,29 @@
+# ==========================================
+# Phase 1: Build Phase (Vite SPA Compilation)
+# ==========================================
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Copy package manifests and install dependencies
+COPY package*.json ./
+RUN npm ci
+
+# Copy source code and build React 19 frontend
+COPY . .
+RUN npm run build
+
+# ==========================================
+# Phase 2: Nginx Web Server Runtime
+# ==========================================
+FROM nginx:alpine AS runner
+
+# Copy custom Nginx proxy configuration
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Copy compiled frontend assets from build stage
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]
