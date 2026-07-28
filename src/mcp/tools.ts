@@ -189,11 +189,11 @@ function findNextTaskToImplement(tasks: any[]) {
   return pending[0];
 }
 
-export async function handleToolCall(name: string, args: any) {
+export async function handleToolCall(name: string, args: any, agentId?: string) {
   try {
     switch (name) {
       case 'giramichi_create_session': {
-        const session = await db.createSession(args.name, args.description, args.agent_id, args.workflow_id);
+        const session = await db.createSession(args.name, args.description, args.agent_id || agentId, args.workflow_id);
         return {
           content: [
             {
@@ -235,7 +235,7 @@ export async function handleToolCall(name: string, args: any) {
       }
 
       case 'giramichi_close_session': {
-        const session = await db.updateSessionStatus(args.session_id, args.status);
+        const session = await db.updateSessionStatus(args.session_id, args.status, agentId);
         return {
           content: [
             {
@@ -247,7 +247,7 @@ export async function handleToolCall(name: string, args: any) {
       }
 
       case 'giramichi_create_workflow': {
-        const wf = await db.createWorkflow(args.name, args.description, args.statuses, true);
+        const wf = await db.createWorkflow(args.name, args.description, args.statuses, true, agentId);
         return {
           content: [
             {
@@ -259,7 +259,7 @@ export async function handleToolCall(name: string, args: any) {
       }
 
       case 'giramichi_set_active_workflow': {
-        const wf = await db.setActiveWorkflow(args.workflow_id);
+        const wf = await db.setActiveWorkflow(args.workflow_id, agentId);
         return {
           content: [
             {
@@ -271,7 +271,7 @@ export async function handleToolCall(name: string, args: any) {
       }
 
       case 'giramichi_create_task': {
-        const task = await db.createTask(args.title, args.description, args.status_id, args.priority, args.tags, {}, args.session_id, args.order);
+        const task = await db.createTask(args.title, args.description, args.status_id, args.priority, args.tags, {}, args.session_id, args.order, agentId);
         return {
           content: [
             {
@@ -283,7 +283,7 @@ export async function handleToolCall(name: string, args: any) {
       }
 
       case 'giramichi_batch_create_tasks': {
-        const created = await db.batchCreateTasks(args.tasks, args.session_id);
+        const created = await db.batchCreateTasks(args.tasks, args.session_id, agentId);
         return {
           content: [
             {
@@ -295,7 +295,7 @@ export async function handleToolCall(name: string, args: any) {
       }
 
       case 'giramichi_move_task': {
-        const task = await db.moveTask(args.task_id, args.new_status_id, args.reason);
+        const task = await db.moveTask(args.task_id, args.new_status_id, args.reason, agentId);
         return {
           content: [
             {
@@ -313,7 +313,7 @@ export async function handleToolCall(name: string, args: any) {
           priority: args.priority,
           order: args.order,
           tags: args.tags,
-        });
+        }, agentId);
         return {
           content: [
             {

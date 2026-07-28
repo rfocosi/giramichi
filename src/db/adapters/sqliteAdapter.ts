@@ -74,6 +74,7 @@ export class SqliteAdapter implements IDatabaseAdapter {
         id TEXT PRIMARY KEY,
         session_id TEXT,
         task_id TEXT,
+        agent_id TEXT,
         action_type TEXT NOT NULL,
         details TEXT NOT NULL,
         from_status TEXT,
@@ -93,6 +94,10 @@ export class SqliteAdapter implements IDatabaseAdapter {
 
     try {
       this.db.exec(`ALTER TABLE activity_logs ADD COLUMN session_id TEXT;`);
+    } catch (_) {}
+
+    try {
+      this.db.exec(`ALTER TABLE activity_logs ADD COLUMN agent_id TEXT;`);
     } catch (_) {}
   }
 
@@ -523,11 +528,22 @@ export class SqliteAdapter implements IDatabaseAdapter {
     const timestamp = new Date().toISOString();
 
     const stmt = this.db.prepare(`
-      INSERT INTO activity_logs (id, session_id, task_id, action_type, details, from_status, to_status, reason, timestamp)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO activity_logs (id, session_id, task_id, agent_id, action_type, details, from_status, to_status, reason, timestamp)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
-    stmt.run(id, log.session_id || null, log.task_id || null, log.action_type, log.details, log.from_status || null, log.to_status || null, log.reason || null, timestamp);
+    stmt.run(
+      id,
+      log.session_id || null,
+      log.task_id || null,
+      log.agent_id || null,
+      log.action_type,
+      log.details,
+      log.from_status || null,
+      log.to_status || null,
+      log.reason || null,
+      timestamp
+    );
 
     const fullLog: ActivityLog = { id, timestamp, ...log };
     this.notify('LOG_ADDED', fullLog);
@@ -545,6 +561,7 @@ export class SqliteAdapter implements IDatabaseAdapter {
       id: r.id,
       session_id: r.session_id || undefined,
       task_id: r.task_id || undefined,
+      agent_id: r.agent_id || undefined,
       action_type: r.action_type,
       details: r.details,
       from_status: r.from_status || undefined,

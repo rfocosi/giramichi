@@ -45,6 +45,7 @@ export interface ActivityLog {
   id: string;
   session_id?: string;
   task_id?: string;
+  agent_id?: string;
   action_type: 'WORKFLOW_CREATED' | 'WORKFLOW_ACTIVATED' | 'SESSION_CREATED' | 'SESSION_UPDATED' | 'TASK_CREATED' | 'TASK_MOVED' | 'TASK_UPDATED';
   details: string;
   from_status?: string;
@@ -63,13 +64,13 @@ export interface IDatabaseAdapter {
   getSessionById(sessionId: string): Promise<Session | null>;
   getActiveSession(): Promise<Session>;
   createSession(name: string, description: string, agentId?: string, workflowId?: string): Promise<Session>;
-  updateSessionStatus(sessionId: string, status: Session['status']): Promise<Session>;
+  updateSessionStatus(sessionId: string, status: Session['status'], agentId?: string): Promise<Session>;
   
   // Workflows
   getWorkflows(): Promise<Workflow[]>;
   getActiveWorkflow(): Promise<Workflow>;
-  createWorkflow(name: string, description: string, statuses: Status[], setActive?: boolean): Promise<Workflow>;
-  setActiveWorkflow(workflowId: string): Promise<Workflow>;
+  createWorkflow(name: string, description: string, statuses: Status[], setActive?: boolean, agentId?: string): Promise<Workflow>;
+  setActiveWorkflow(workflowId: string, agentId?: string): Promise<Workflow>;
   
   // Tasks
   getTasks(workflowId?: string, sessionId?: string): Promise<Task[]>;
@@ -82,14 +83,16 @@ export interface IDatabaseAdapter {
     tags?: string[],
     metadata?: Record<string, any>,
     sessionId?: string,
-    order?: number
+    order?: number,
+    agentId?: string
   ): Promise<Task>;
   batchCreateTasks(
     tasksInput: Array<{ title: string; description: string; status_id?: string; priority?: Task['priority']; tags?: string[]; session_id?: string; order?: number }>,
-    sessionId?: string
+    sessionId?: string,
+    agentId?: string
   ): Promise<Task[]>;
-  moveTask(taskId: string, newStatusId: string, reason?: string): Promise<Task>;
-  updateTask(taskId: string, updates: Partial<Pick<Task, 'title' | 'description' | 'priority' | 'tags' | 'metadata' | 'order'>>): Promise<Task>;
+  moveTask(taskId: string, newStatusId: string, reason?: string, agentId?: string): Promise<Task>;
+  updateTask(taskId: string, updates: Partial<Pick<Task, 'title' | 'description' | 'priority' | 'tags' | 'metadata' | 'order'>>, agentId?: string): Promise<Task>;
   
   // Activity Logs
   logActivity(log: Omit<ActivityLog, 'id' | 'timestamp'>): Promise<void>;

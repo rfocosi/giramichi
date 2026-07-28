@@ -87,6 +87,7 @@ export class MysqlAdapter implements IDatabaseAdapter {
         id VARCHAR(64) PRIMARY KEY,
         session_id VARCHAR(64),
         task_id VARCHAR(64),
+        agent_id VARCHAR(128),
         action_type VARCHAR(64) NOT NULL,
         details TEXT NOT NULL,
         from_status VARCHAR(64),
@@ -106,6 +107,10 @@ export class MysqlAdapter implements IDatabaseAdapter {
 
     try {
       await this.pool.query(`ALTER TABLE activity_logs ADD COLUMN session_id VARCHAR(64);`);
+    } catch (_) {}
+
+    try {
+      await this.pool.query(`ALTER TABLE activity_logs ADD COLUMN agent_id VARCHAR(128);`);
     } catch (_) {}
   }
 
@@ -505,9 +510,9 @@ export class MysqlAdapter implements IDatabaseAdapter {
     const timestamp = new Date().toISOString();
 
     await this.pool.query(
-      `INSERT INTO activity_logs (id, session_id, task_id, action_type, details, from_status, to_status, reason, timestamp)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, log.session_id || null, log.task_id || null, log.action_type, log.details, log.from_status || null, log.to_status || null, log.reason || null, timestamp]
+      `INSERT INTO activity_logs (id, session_id, task_id, agent_id, action_type, details, from_status, to_status, reason, timestamp)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, log.session_id || null, log.task_id || null, log.agent_id || null, log.action_type, log.details, log.from_status || null, log.to_status || null, log.reason || null, timestamp]
     );
 
     const fullLog: ActivityLog = { id, timestamp, ...log };
@@ -527,6 +532,7 @@ export class MysqlAdapter implements IDatabaseAdapter {
       id: r.id,
       session_id: r.session_id || undefined,
       task_id: r.task_id || undefined,
+      agent_id: r.agent_id || undefined,
       action_type: r.action_type,
       details: r.details,
       from_status: r.from_status || undefined,

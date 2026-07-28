@@ -4,6 +4,7 @@ import { randomUUID } from 'crypto';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { createMCPServer } from './mcpServer.js';
+import { authenticateAgent } from '../auth/middleware.js';
 
 // Map of active SSE transports by session ID
 const sseTransports = new Map<string, SSEServerTransport>();
@@ -13,6 +14,7 @@ const streamableTransports = new Map<string, StreamableHTTPServerTransport>();
 
 export function createHttpMcpRouter(): Router {
   const router = Router();
+  router.use(authenticateAgent);
 
   // ---------------------------------------------------------
   // 1. SSE Transport Endpoints (Legacy / Compatibility Mode)

@@ -87,6 +87,7 @@ export class MssqlAdapter implements IDatabaseAdapter {
         id NVARCHAR(64) PRIMARY KEY,
         session_id NVARCHAR(64),
         task_id NVARCHAR(64),
+        agent_id NVARCHAR(128),
         action_type NVARCHAR(64) NOT NULL,
         details NVARCHAR(MAX) NOT NULL,
         from_status NVARCHAR(64),
@@ -114,6 +115,13 @@ export class MssqlAdapter implements IDatabaseAdapter {
       await this.pool.request().query(`
         IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('activity_logs') AND name = 'session_id')
         ALTER TABLE activity_logs ADD session_id NVARCHAR(64);
+      `);
+    } catch (_) {}
+
+    try {
+      await this.pool.request().query(`
+        IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('activity_logs') AND name = 'agent_id')
+        ALTER TABLE activity_logs ADD agent_id NVARCHAR(128);
       `);
     } catch (_) {}
   }
@@ -561,13 +569,14 @@ export class MssqlAdapter implements IDatabaseAdapter {
       .input('id', sql.NVarChar, id)
       .input('session_id', sql.NVarChar, log.session_id || null)
       .input('task_id', sql.NVarChar, log.task_id || null)
+      .input('agent_id', sql.NVarChar, log.agent_id || null)
       .input('action', sql.NVarChar, log.action_type)
       .input('details', sql.NVarChar, log.details)
       .input('from', sql.NVarChar, log.from_status || null)
       .input('to', sql.NVarChar, log.to_status || null)
       .input('reason', sql.NVarChar, log.reason || null)
       .input('timestamp', sql.NVarChar, timestamp)
-      .query(`INSERT INTO activity_logs (id, session_id, task_id, action_type, details, from_status, to_status, reason, timestamp) VALUES (@id, @session_id, @task_id, @action, @details, @from, @to, @reason, @timestamp)`);
+      .query(`INSERT INTO activity_logs (id, session_id, task_id, agent_id, action_type, details, from_status, to_status, reason, timestamp) VALUES (@id, @session_id, @task_id, @agent_id, @action, @details, @from, @to, @reason, @timestamp)`);
 
     const fullLog: ActivityLog = { id, timestamp, ...log };
     this.notify('LOG_ADDED', fullLog);
@@ -587,6 +596,7 @@ export class MssqlAdapter implements IDatabaseAdapter {
       id: r.id,
       session_id: r.session_id || undefined,
       task_id: r.task_id || undefined,
+      agent_id: r.agent_id || undefined,
       action_type: r.action_type,
       details: r.details,
       from_status: r.from_status || undefined,
