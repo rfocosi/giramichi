@@ -10,7 +10,8 @@
     "server": "tsx src/server/index.ts",
     "mcp": "tsx src/mcp/mcpServer.ts",
     "mcp:http": "tsx src/mcp/httpMcpServer.ts",
-    "demo": "tsx scripts/demo_ai_simulation.ts"
+    "demo": "tsx scripts/demo_ai_simulation.ts",
+    "demo:device": "tsx scripts/demo_device_flow.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.6.0",
@@ -18,6 +19,7 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "jose": "^6.2.4",
     "lucide-react": "^0.475.0",
     "mssql": "^11.0.1",
     "mysql2": "^3.12.0",

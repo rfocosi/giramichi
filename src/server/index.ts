@@ -3,6 +3,7 @@ import cors from 'cors';
 import { db } from '../db/index.js';
 import { handleToolCall } from '../mcp/tools.js';
 import { createHttpMcpRouter } from '../mcp/httpMcpServer.js';
+import { authenticateAgent } from '../auth/middleware.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -129,13 +130,13 @@ app.get('/api/activity', async (req: Request, res: Response) => {
 });
 
 // MCP direct execution endpoint (for testing & simulation)
-app.post('/api/mcp-direct', async (req: Request, res: Response) => {
+app.post('/api/mcp-direct', authenticateAgent, async (req: Request, res: Response) => {
   try {
     const { name, args } = req.body;
     if (!name) {
       return res.status(400).json({ success: false, error: 'Tool name required' });
     }
-    const result = await handleToolCall(name, args || {});
+    const result = await handleToolCall(name, args || {}, req.agentId);
     res.json({ success: true, result });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
