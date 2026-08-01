@@ -1,0 +1,45 @@
+# ==========================================
+# Phase 1: Build & Dependency Installation
+# ==========================================
+FROM node:20-alpine AS builder
+
+# Install build dependencies for C++ native modules (better-sqlite3)
+RUN apk add --no-cache python3 make g++ gcc
+
+WORKDIR /app
+
+# Copy package manifests and install dependencies
+COPY package*.json ./
+RUN npm ci
+
+# Copy source code and run typescript compiler validation
+COPY . .
+RUN npm run build
+
+# ==========================================
+# Phase 2: Production Runtime
+# ==========================================
+FROM node:20-alpine AS runner
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV PORT=3001
+
+# Copy dependencies and application source
+COPY package*.json ./
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/src ./src
+COPY --from=builder /app/tsconfig.json ./tsconfig.json
+
+# Create database persistence directory
+RUN mkdir -p /app/data && chown -R node:node /app
+
+USER node
+
+EXPOSE 3001
+
+VOLUME ["/app/data"]
+
+CMD ["npm", "run", "server"]

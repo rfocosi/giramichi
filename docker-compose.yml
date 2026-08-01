@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   keycloak:
     image: quay.io/keycloak/keycloak:latest
@@ -13,4 +11,45 @@ services:
       - "8080:8080"
     volumes:
       - ./keycloak/giramichi-realm.json:/opt/keycloak/data/import/giramichi-realm.json
+    restart: unless-stopped
+
+  giramichi-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    container_name: giramichi-server
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+
+  giramichi-frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: giramichi-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - giramichi-server
+    restart: unless-stopped
+
+  giramichi-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile.mcp
+    container_name: giramichi-mcp
+    environment:
+      - NODE_ENV=production
+      - MCP_HTTP_PORT=3002
+    ports:
+      - "3002:3002"
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - giramichi-server
     restart: unless-stopped
