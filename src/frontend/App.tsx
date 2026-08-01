@@ -10,12 +10,12 @@ export const App: React.FC = () => {
   const [workflow, setWorkflow] = useState<Workflow | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [logs, setLogs] = useState<ActivityLog[]>([]);
-  const [workflowsList, setWorkflowsList] = useState<Array<{ id: string; name: string }>>([]);
   const [sessionsList, setSessionsList] = useState<Session[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState<string>('all');
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isSimulating, setIsSimulating] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [isActivityDrawerOpen, setIsActivityDrawerOpen] = useState(false);
 
   // Tag Filtering State
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -55,23 +55,9 @@ export const App: React.FC = () => {
     }
   };
 
-  // Fetch workflows list
-  const fetchWorkflowsList = async () => {
-    try {
-      const res = await fetch('/api/workflows');
-      const data = await res.json();
-      if (data.success) {
-        setWorkflowsList(data.workflows.map((w: Workflow) => ({ id: w.id, name: w.name })));
-      }
-    } catch (err) {
-      console.error('Error fetching workflows list:', err);
-    }
-  };
-
   useEffect(() => {
     fetchBoard(selectedSessionId);
     fetchSessions();
-    fetchWorkflowsList();
 
     // Subscribe to SSE stream for real-time live sync
     const eventSource = new EventSource('/api/events');
@@ -82,7 +68,6 @@ export const App: React.FC = () => {
         console.log('[SSE Event Received]', payload);
         fetchBoard(selectedSessionId);
         fetchSessions();
-        fetchWorkflowsList();
       } catch (err) {
         console.error('Failed to parse SSE payload:', err);
       }
@@ -92,25 +77,6 @@ export const App: React.FC = () => {
       eventSource.close();
     };
   }, [selectedSessionId]);
-
-  const handleSelectWorkflow = async (workflowId: string) => {
-    try {
-      const res = await fetch('/api/mcp-direct', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: 'giramichi_set_active_workflow',
-          args: { workflow_id: workflowId },
-        }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        fetchBoard(selectedSessionId);
-      }
-    } catch (err) {
-      console.error('Failed to switch workflow:', err);
-    }
-  };
 
   const handleSelectSession = (sessionId: string) => {
     setSelectedSessionId(sessionId);
@@ -282,7 +248,6 @@ export const App: React.FC = () => {
       setIsSimulating(false);
       fetchBoard(selectedSessionId);
       fetchSessions();
-      fetchWorkflowsList();
     }
   };
 
@@ -303,14 +268,14 @@ export const App: React.FC = () => {
         workflowName={workflow.name}
         workflowDesc={workflow.description}
         totalTasks={tasks.length}
-        workflowsList={workflowsList}
-        activeWorkflowId={workflow.id}
-        onSelectWorkflow={handleSelectWorkflow}
         sessionsList={sessionsList}
         selectedSessionId={selectedSessionId}
         onSelectSession={handleSelectSession}
         onTriggerSim={handleTriggerSim}
         isSimulating={isSimulating}
+        isActivityDrawerOpen={isActivityDrawerOpen}
+        onToggleActivityDrawer={() => setIsActivityDrawerOpen((prev) => !prev)}
+        logCount={logs.length}
       />
 
       <TagFilterBar
@@ -324,20 +289,20 @@ export const App: React.FC = () => {
         totalCount={tasks.length}
       />
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '24px' }}>
-        <div>
-          <KanbanBoard
-            statuses={workflow.statuses}
-            tasks={filteredTasks}
-            onTaskClick={(task) => setSelectedTask(task)}
-            onTagClick={handleToggleTag}
-          />
-        </div>
-
-        <div>
-          <ActivityLogStream logs={logs} />
-        </div>
+      <div>
+        <KanbanBoard
+          statuses={workflow.statuses}
+          tasks={filteredTasks}
+          onTaskClick={(task) => setSelectedTask(task)}
+          onTagClick={handleToggleTag}
+        />
       </div>
+
+      <ActivityLogStream
+        logs={logs}
+        isOpen={isActivityDrawerOpen}
+        onClose={() => setIsActivityDrawerOpen(false)}
+      />
 
       <TaskDetailModal
         task={selectedTask}

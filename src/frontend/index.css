@@ -314,3 +314,48 @@ body {
   border-radius: 16px;
   padding: 28px;
 }
+
+/* Side Drawer */
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  z-index: 2000;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.drawer-content {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 440px;
+  max-width: 90vw;
+  background: rgba(11, 15, 25, 0.95);
+  backdrop-filter: blur(24px);
+  border-left: 1px solid var(--border-glass);
+  box-shadow: -10px 0 40px rgba(0, 0, 0, 0.6);
+  z-index: 2001;
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+  animation: slideInRight 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
