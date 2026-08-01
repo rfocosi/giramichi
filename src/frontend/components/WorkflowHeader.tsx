@@ -1,33 +1,33 @@
 import React from 'react';
-import { Sparkles, ShieldAlert, Cpu, Layers, Bot } from 'lucide-react';
+import { Sparkles, ShieldAlert, Cpu, Layers, Bot, Activity } from 'lucide-react';
 import { Session } from '../../db/db.js';
 
 interface WorkflowHeaderProps {
   workflowName: string;
   workflowDesc: string;
   totalTasks: number;
-  workflowsList: Array<{ id: string; name: string }>;
-  activeWorkflowId: string;
-  onSelectWorkflow: (id: string) => void;
   sessionsList: Session[];
   selectedSessionId: string;
   onSelectSession: (id: string) => void;
   onTriggerSim: () => void;
   isSimulating: boolean;
+  isActivityDrawerOpen?: boolean;
+  onToggleActivityDrawer?: () => void;
+  logCount?: number;
 }
 
 export const WorkflowHeader: React.FC<WorkflowHeaderProps> = ({
   workflowName,
   workflowDesc,
   totalTasks,
-  workflowsList,
-  activeWorkflowId,
-  onSelectWorkflow,
   sessionsList,
   selectedSessionId,
   onSelectSession,
   onTriggerSim,
   isSimulating,
+  isActivityDrawerOpen,
+  onToggleActivityDrawer,
+  logCount,
 }) => {
   return (
     <header style={{ marginBottom: '24px' }}>
@@ -63,7 +63,7 @@ export const WorkflowHeader: React.FC<WorkflowHeaderProps> = ({
           </div>
         </div>
 
-        {/* Action Controls: Workflow Selector, Session Selector & AI Sim Button */}
+        {/* Action Controls: Read-Only Workflow Badge, Session Selector, Activity Drawer Button & AI Sim Button */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
           {/* Agent Session Filter */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(99, 102, 241, 0.1)', padding: '6px 12px', borderRadius: '8px', border: '1px solid rgba(99, 102, 241, 0.3)' }}>
@@ -93,29 +93,52 @@ export const WorkflowHeader: React.FC<WorkflowHeaderProps> = ({
             </select>
           </div>
 
-          {/* Workflow Selector */}
+          {/* Read-Only Workflow Badge */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255,255,255,0.05)', padding: '6px 12px', borderRadius: '8px', border: '1px solid var(--border-glass)' }}>
             <Layers size={16} color="var(--accent-cyan)" />
-            <select
-              value={activeWorkflowId}
-              onChange={(e) => onSelectWorkflow(e.target.value)}
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>WORKFLOW:</span>
+            <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)' }}>
+              {workflowName || 'Active Workflow'}
+            </span>
+          </div>
+
+          {/* Activity Stream Drawer Button */}
+          {onToggleActivityDrawer && (
+            <button
+              onClick={onToggleActivityDrawer}
               style={{
-                background: 'transparent',
-                border: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                background: isActivityDrawerOpen ? 'rgba(6, 182, 212, 0.2)' : 'rgba(255,255,255,0.05)',
+                border: isActivityDrawerOpen ? '1px solid var(--accent-cyan)' : '1px solid var(--border-glass)',
+                borderRadius: '8px',
                 color: 'var(--text-main)',
+                padding: '6px 12px',
                 fontSize: '0.85rem',
-                fontWeight: 500,
+                fontWeight: 600,
                 cursor: 'pointer',
-                outline: 'none',
+                transition: 'all 0.2s ease',
               }}
             >
-              {workflowsList.map((wf) => (
-                <option key={wf.id} value={wf.id} style={{ background: '#1e293b', color: '#fff' }}>
-                  {wf.name}
-                </option>
-              ))}
-            </select>
-          </div>
+              <Activity size={16} color="var(--accent-cyan)" />
+              <span>Activity Stream</span>
+              {logCount !== undefined && logCount > 0 && (
+                <span
+                  style={{
+                    background: 'rgba(6, 182, 212, 0.2)',
+                    color: 'var(--accent-cyan)',
+                    padding: '2px 8px',
+                    borderRadius: '10px',
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                  }}
+                >
+                  {logCount}
+                </span>
+              )}
+            </button>
+          )}
 
           <button
             onClick={onTriggerSim}
