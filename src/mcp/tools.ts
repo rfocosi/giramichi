@@ -3,7 +3,7 @@ import { db } from '../db/index.js';
 export const toolDefinitions = [
   {
     name: 'giramichi_create_session',
-    description: 'Creates a top-level agent execution session for organizing tasks and activities when multiple AI agents work on the same server. INSTRUCTION FOR AI AGENT: Before starting task management, ask the user if they want to start a new session or input an existing session ID.',
+    description: 'Creates a top-level agent execution session for organizing tasks and activities when multiple AI agents work on the same server. TRIGGER KEYWORDS: Use this tool whenever the user prompt contains "plan", "planning", or requests project task management.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -88,7 +88,7 @@ export const toolDefinitions = [
   },
   {
     name: 'giramichi_create_task',
-    description: 'Creates a new task card on the Giramichi board under a designated workflow status, session, and decimal execution order.',
+    description: 'Creates a new task card on the Giramichi board under a designated workflow status, session, and decimal execution order. TRIGGER KEYWORDS: Always use when user requests planning or task breakdown ("plan", "planning").',
     inputSchema: {
       type: 'object',
       properties: {
@@ -105,7 +105,7 @@ export const toolDefinitions = [
   },
   {
     name: 'giramichi_batch_create_tasks',
-    description: 'Batch adds multiple tasks to the board with sequential or custom decimal order indexes.',
+    description: 'Batch adds multiple tasks to the board with sequential or custom decimal order indexes. TRIGGER KEYWORDS: Always use when creating tasks from a plan ("plan", "planning").',
     inputSchema: {
       type: 'object',
       properties: {
