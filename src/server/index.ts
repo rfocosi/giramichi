@@ -16,6 +16,23 @@ const httpMcpRouter = createHttpMcpRouter();
 app.use('/mcp', httpMcpRouter);
 app.use('/api/mcp', httpMcpRouter);
 
+// Dynamic Configuration API for Dashboard
+app.get('/api/config', (req: Request, res: Response) => {
+  const apiUrl = process.env.GIRAMICHI_API_URL || '';
+  res.json({
+    success: true,
+    config: {
+      apiUrl,
+    },
+  });
+});
+
+app.get('/config.js', (req: Request, res: Response) => {
+  const apiUrl = process.env.GIRAMICHI_API_URL || '';
+  res.setHeader('Content-Type', 'application/javascript');
+  res.send(`window.__CONFIG__ = ${JSON.stringify({ apiUrl })};`);
+});
+
 // List of connected SSE clients
 const sseClients: Response[] = [];
 
