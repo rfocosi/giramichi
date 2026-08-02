@@ -6,6 +6,13 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { createMCPServer } from './mcpServer.js';
 import { authenticateAgent } from '../auth/middleware.js';
 
+import {
+  initRedisAdapter,
+  publishSessionMessage,
+  subscribeToSession,
+  unsubscribeFromSession
+} from './redisAdapter.js';
+
 // Map of active SSE transports by session ID
 const sseTransports = new Map<string, SSEServerTransport>();
 
@@ -16,6 +23,49 @@ export function createHttpMcpRouter(): Router {
   const router = Router();
   router.use(authenticateAgent);
 
+  // Initialize Redis adapter (if REDIS_URL or REDIS_HOST is configured)
+  initRedisAdapter();
+
+  // Helper function to handle Streamable HTTP transport requests
+  async function handleStreamableHttp(req: Request, res: Response) {
+    const sessionId = (req.headers['mcp-session-id'] as string) || (req.query.sessionId as string);
+    let transport = sessionId ? streamableTransports.get(sessionId) : undefined;
+
+    if (!transport) {
+      // Pre-generate a session ID so the transport is stored in the map
+      // BEFORE handleRequest is called. This prevents a race condition where
+      // follow-up requests (e.g. notifications/initialized) arrive while the
+      // initialize POST is still being processed and find no session in the map.
+      const newSessionId = randomUUID();
+
+      transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: () => newSessionId,
+      });
+
+      const server = createMCPServer();
+      await server.connect(transport);
+
+      // Store immediately using the pre-generated ID so subsequent requests
+      // with mcp-session-id: newSessionId can find this transport at once.
+      streamableTransports.set(newSessionId, transport);
+      console.log(`[Giramichi MCP HTTP] Streamable HTTP Session created: ${newSessionId}`);
+
+      transport.onclose = () => {
+        console.log(`[Giramichi MCP HTTP] Streamable HTTP Session closed: ${newSessionId}`);
+        streamableTransports.delete(newSessionId);
+      };
+    }
+
+    try {
+      await transport.handleRequest(req, res, req.body);
+    } catch (err: any) {
+      console.error('[Giramichi MCP HTTP] Error handling Streamable HTTP request:', err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: err.message });
+      }
+    }
+  }
+
   // ---------------------------------------------------------
   // 1. SSE Transport Endpoints (Legacy / Compatibility Mode)
   // ---------------------------------------------------------
@@ -23,6 +73,12 @@ export function createHttpMcpRouter(): Router {
   // GET /sse (or /mcp/sse) - Establishes SSE stream connection
   router.get('/sse', async (req: Request, res: Response) => {
     console.log('[Giramichi MCP HTTP] Incoming SSE connection request');
+
+    // Explicitly set SSE stream headers to prevent Nginx/Express from closing connection
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
 
     // Determine post endpoint URL based on current router mounting path
     const baseUrl = req.baseUrl || '/mcp';
@@ -34,8 +90,27 @@ export function createHttpMcpRouter(): Router {
     sseTransports.set(transport.sessionId, transport);
     console.log(`[Giramichi MCP HTTP] SSE Session initialized: ${transport.sessionId}`);
 
+    // Register Redis Pub/Sub subscriber for cross-instance message routing
+    await subscribeToSession(transport.sessionId, async (remoteBody) => {
+      console.log(`[Giramichi MCP HTTP] Processing remote Pub/Sub message for session: ${transport.sessionId}`);
+      try {
+        const mockReq: any = { body: remoteBody, query: { sessionId: transport.sessionId }, headers: {} };
+        const mockRes: any = {
+          headersSent: false,
+          status: () => mockRes,
+          json: () => mockRes,
+          end: () => mockRes,
+          writeHead: () => mockRes
+        };
+        await transport.handlePostMessage(mockReq, mockRes, remoteBody);
+      } catch (err: any) {
+        console.error(`[Giramichi MCP HTTP] Error handling Redis Pub/Sub message for ${transport.sessionId}:`, err);
+      }
+    });
+
     transport.onclose = () => {
       console.log(`[Giramichi MCP HTTP] SSE Session closed: ${transport.sessionId}`);
+      unsubscribeFromSession(transport.sessionId);
       sseTransports.delete(transport.sessionId);
     };
 
@@ -43,12 +118,14 @@ export function createHttpMcpRouter(): Router {
       await server.connect(transport);
     } catch (err: any) {
       console.error('[Giramichi MCP HTTP] Error connecting SSE transport:', err);
+      unsubscribeFromSession(transport.sessionId);
       sseTransports.delete(transport.sessionId);
       if (!res.headersSent) {
         res.status(500).json({ error: 'Failed to initialize SSE connection' });
       }
     }
   });
+
 
   // POST /messages (or /mcp/messages) - Handles client messages for active SSE session
   router.post('/messages', async (req: Request, res: Response) => {
@@ -60,12 +137,20 @@ export function createHttpMcpRouter(): Router {
 
     const transport = sseTransports.get(sessionId);
     if (!transport) {
+      // Session not on this local pod: attempt routing via Redis Pub/Sub to the pod holding the session
+      const forwarded = await publishSessionMessage(sessionId, req.body);
+      if (forwarded) {
+        console.log(`[Giramichi MCP HTTP] Session '${sessionId}' hosted on another pod. Message routed via Redis Pub/Sub.`);
+        res.status(202).json({ status: 'accepted', sessionId });
+        return;
+      }
+
       res.status(404).json({ error: `SSE Session '${sessionId}' not found or has expired` });
       return;
     }
 
     try {
-      await transport.handlePostMessage(req, res);
+      await transport.handlePostMessage(req, res, req.body);
     } catch (err: any) {
       console.error(`[Giramichi MCP HTTP] Error handling SSE message for session ${sessionId}:`, err);
       if (!res.headersSent) {
@@ -80,37 +165,7 @@ export function createHttpMcpRouter(): Router {
 
   // ALL / (or /mcp) - Streamable HTTP transport supporting GET & POST requests
   router.all('/', async (req: Request, res: Response) => {
-    const sessionId = (req.headers['mcp-session-id'] as string) || (req.query.sessionId as string);
-    let transport = sessionId ? streamableTransports.get(sessionId) : undefined;
-
-    if (!transport) {
-      transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: () => randomUUID(),
-      });
-
-      const server = createMCPServer();
-      await server.connect(transport);
-
-      if (transport.sessionId) {
-        streamableTransports.set(transport.sessionId, transport);
-      }
-
-      transport.onclose = () => {
-        if (transport?.sessionId) {
-          console.log(`[Giramichi MCP HTTP] Streamable HTTP Session closed: ${transport.sessionId}`);
-          streamableTransports.delete(transport.sessionId);
-        }
-      };
-    }
-
-    try {
-      await transport.handleRequest(req, res, req.body);
-    } catch (err: any) {
-      console.error('[Giramichi MCP HTTP] Error handling Streamable HTTP request:', err);
-      if (!res.headersSent) {
-        res.status(500).json({ error: err.message });
-      }
-    }
+    return handleStreamableHttp(req, res);
   });
 
   return router;

@@ -38,6 +38,13 @@ services:
       - giramichi-server
     restart: unless-stopped
 
+  redis:
+    image: redis:7-alpine
+    container_name: giramichi-redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
   giramichi-mcp:
     build:
       context: .
@@ -46,10 +53,13 @@ services:
     environment:
       - NODE_ENV=production
       - MCP_HTTP_PORT=3002
+      - REDIS_URL=redis://redis:6379
     ports:
       - "3002:3002"
     volumes:
       - ./data:/app/data
     depends_on:
       - giramichi-server
+      - redis
     restart: unless-stopped
+
