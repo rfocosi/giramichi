@@ -9,7 +9,7 @@ dotenv.config();
 
 function createDatabaseAdapter(): IDatabaseAdapter {
   const dbType = (process.env.DB_TYPE || 'sqlite').toLowerCase();
-  console.log(`[Giramichi DB Factory] Initializing database backend: "${dbType}"`);
+  console.error(`[Giramichi DB Factory] Initializing database backend: "${dbType}"`);
 
   switch (dbType) {
     case 'postgres':

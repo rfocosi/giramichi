@@ -207,8 +207,21 @@ Add Giramichi to `~/.codeium/windsurf/mcp_config.json`:
 
 ### 7. Google Antigravity IDE & AGY CLI
 
-Add Giramichi to `.agents/mcp.json` in your workspace root or global Antigravity config `~/.gemini/config/mcp.json`:
+Add Giramichi to `.agents/mcp_config.json` in your workspace root or global Antigravity config `~/.gemini/config/mcp_config.json`:
 
+#### For Remote SSE Mode (`serverUrl`):
+```json
+{
+  "mcpServers": {
+    "giramichi": {
+      "serverUrl": "http://192.168.50.10:3001/mcp/sse",
+      "headers": {}
+    }
+  }
+}
+```
+
+#### For Stdio Mode (`command` + `args`):
 ```json
 {
   "mcpServers": {
@@ -302,6 +315,11 @@ This starts a web-based inspector UI (typically at `http://localhost:5173`) wher
 
 ## 🔍 Troubleshooting
 
+- **`failed to connect (session ID: ): session not found`**:
+  - **Cause**: Mismatch between `type` transport setting (`sse` vs `http`) and the configured URL path.
+  - **Fix for `type: "sse"`**: Ensure `/sse` is appended to the URL (e.g. `http://<host>:<port>/mcp/sse`). If you point an `sse` client to `/mcp`, it hits the Streamable HTTP handler instead of the SSE listener and fails to acquire a session ID.
+  - **Fix for `type: "http"`**: Point to `http://<host>:<port>/mcp`.
+  - **Verification**: Test the SSE endpoint with `curl -v http://<host>:<port>/mcp/sse`. You should see `event: endpoint` and `data: /mcp/messages?sessionId=<UUID>`.
 - **Node/npm Not Found in GUI Clients**: Some GUI applications (like Claude Desktop or Cursor on macOS/Linux) do not inherit shell environment `$PATH` settings. If the server fails to connect, specify full paths to node/npm (e.g. `/usr/local/bin/npm` or `/home/user/.nvm/versions/node/v20.x.x/bin/npm`).
 - **Stdio Corruption**: Do not add `console.log` statements to `mcpServer.ts` or imported files, as standard output is strictly reserved for MCP JSON-RPC protocol communication. Use `console.error` for internal server logging.
 - **Database Permissions**: Ensure the `data/` directory is writable by the process running the MCP server.
