@@ -3,7 +3,7 @@ import { db } from '../db/index.js';
 export const toolDefinitions = [
   {
     name: 'giramichi_create_session',
-    description: 'Creates a top-level agent execution session for organizing tasks and activities when multiple AI agents work on the same server.',
+    description: 'Creates a top-level agent execution session for organizing tasks and activities when multiple AI agents work on the same server. INSTRUCTION FOR AI AGENT: Before starting task management, ask the user if they want to start a new session or input an existing session ID.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -17,7 +17,7 @@ export const toolDefinitions = [
   },
   {
     name: 'giramichi_list_sessions',
-    description: 'Lists active, completed, or archived agent sessions.',
+    description: 'Lists active, completed, or archived agent sessions. INSTRUCTION FOR AI AGENT: Do not automatically list all sessions. Instead, ask the user if they want to create a new session or input an existing session ID.',
     inputSchema: {
       type: 'object',
       properties: {
