@@ -28,6 +28,7 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       timeout: 120 * 1000,
       env: {
+        VITE_GIRAMICHI_API_URL: 'http://localhost:3001',
         GIRAMICHI_API_URL: 'http://localhost:3001',
       },
     },

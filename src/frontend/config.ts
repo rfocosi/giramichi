@@ -17,13 +17,20 @@ let appConfig: AppConfig = {
 };
 
 export const fetchConfig = async (): Promise<AppConfig> => {
-  // Check VITE_DEMO environment variable
+  // Check build-time environment variables (e.g. Vite dev or build)
   const metaEnv = (import.meta as any).env;
-  if (metaEnv && (metaEnv.VITE_DEMO === 'true' || metaEnv.VITE_DEMO === '1')) {
-    appConfig.isDemo = true;
+  if (metaEnv) {
+    if (metaEnv.VITE_GIRAMICHI_API_URL) {
+      appConfig.apiUrl = metaEnv.VITE_GIRAMICHI_API_URL;
+    } else if (metaEnv.VITE_API_URL) {
+      appConfig.apiUrl = metaEnv.VITE_API_URL;
+    }
+    if (metaEnv.VITE_DEMO === 'true' || metaEnv.VITE_DEMO === '1') {
+      appConfig.isDemo = true;
+    }
   }
 
-  // If window.__CONFIG__ has values, use them
+  // Check runtime configuration injected by frontend image (window.__CONFIG__ from /config.js)
   if (typeof window !== 'undefined' && window.__CONFIG__) {
     if (window.__CONFIG__.apiUrl) {
       appConfig.apiUrl = window.__CONFIG__.apiUrl;
@@ -31,22 +38,6 @@ export const fetchConfig = async (): Promise<AppConfig> => {
     if (typeof window.__CONFIG__.isDemo === 'boolean') {
       appConfig.isDemo = window.__CONFIG__.isDemo;
     }
-  }
-
-  // Fetch dynamic runtime config from /api/config
-  try {
-    const res = await fetch('/api/config');
-    if (res.ok) {
-      const data = await res.json();
-      if (data.success && typeof data.config?.apiUrl === 'string') {
-        appConfig.apiUrl = data.config.apiUrl;
-      }
-      if (data.success && typeof data.config?.isDemo === 'boolean') {
-        appConfig.isDemo = appConfig.isDemo || data.config.isDemo;
-      }
-    }
-  } catch (err) {
-    // Ignore fetch error if server is non-relative
   }
 
   if (!appConfig.apiUrl) {

@@ -159,6 +159,24 @@ This script programmatically creates a custom workflow, batch-adds tasks, transi
 
 ---
 
+## ⚙️ Frontend Configuration & Environment Variables
+
+Giramichi's React dashboard uses `GIRAMICHI_API_URL` to connect to the backend Express server. Configuration is dynamically initialized on the frontend layer without requiring server-side configuration API endpoints:
+
+1. **Build-Time Environment Variables**:
+   Specify `VITE_GIRAMICHI_API_URL` or `VITE_API_URL` in your build environment or `.env` file (e.g. `VITE_GIRAMICHI_API_URL=http://localhost:3001`).
+
+2. **Container Startup Runtime Injection**:
+   When running via Docker (`giramichi-frontend`), the container entrypoint script (`scripts/generate-frontend-config.sh`) generates `/usr/share/nginx/html/config.js` at startup based on the `GIRAMICHI_API_URL` environment variable passed to the frontend container:
+   ```javascript
+   window.__CONFIG__ = { apiUrl: "http://localhost:3001", isDemo: false };
+   ```
+
+3. **Fallback & Validation**:
+   During initialization, `fetchConfig()` in `src/frontend/config.ts` inspects `import.meta.env` first, followed by `window.__CONFIG__`. If `GIRAMICHI_API_URL` is missing, an explicit error is thrown (`GIRAMICHI_API_URL is not defined`).
+
+---
+
 ## 🔌 Integrating with MCP Clients
 
 You can connect Giramichi to any MCP-compliant application (Claude Desktop, Claude Code CLI, OpenCode, GitHub Copilot, Cursor, Windsurf, Google Antigravity IDE, Cline, Zed, etc.).
