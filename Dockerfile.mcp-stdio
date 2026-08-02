@@ -1,0 +1,42 @@
+# ==========================================
+# Phase 1: Build Phase
+# ==========================================
+FROM node:20-alpine AS builder
+
+# Install build dependencies for C++ native modules (better-sqlite3)
+RUN apk add --no-cache python3 make g++ gcc
+
+WORKDIR /app
+
+# Copy package manifests and install dependencies
+COPY package*.json ./
+RUN npm ci
+
+# Copy source code and validate compilation
+COPY . .
+RUN npm run build
+
+# ==========================================
+# Phase 2: Standalone Stdio MCP Server Runtime
+# ==========================================
+FROM node:20-alpine AS runner
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+# Copy dependencies and application source
+COPY package*.json ./
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/src ./src
+COPY --from=builder /app/tsconfig.json ./tsconfig.json
+
+# Create database persistence directory
+RUN mkdir -p /app/data && chown -R node:node /app
+
+USER node
+
+VOLUME ["/app/data"]
+
+CMD ["./node_modules/.bin/tsx", "src/mcp/mcpServer.ts"]
