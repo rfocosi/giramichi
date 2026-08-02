@@ -182,6 +182,8 @@ export const toolDefinitions = [
   },
 ];
 
+let activeMcpSessionId: string | null = null;
+
 function findNextTaskToImplement(tasks: any[]) {
   const pending = tasks.filter((t) => t.status_id !== 'done' && t.status_id !== 'completed');
   if (pending.length === 0) return null;
@@ -190,40 +192,46 @@ function findNextTaskToImplement(tasks: any[]) {
 }
 
 export async function resolveOrCreateSession(sessionId?: string, agentId?: string): Promise<{ id: string; autoCreated: boolean }> {
-  // If an explicit session_id is provided (and not special keywords like 'all', 'new', 'auto'), check if it exists
-  if (sessionId && sessionId !== 'all' && sessionId !== 'new' && sessionId !== 'auto') {
+  // 1. If explicit session_id is passed (and not special keywords like 'all', 'new', 'auto', 'default'), use it
+  if (sessionId && sessionId !== 'all' && sessionId !== 'new' && sessionId !== 'auto' && sessionId !== 'default') {
     const existing = await db.getSessionById(sessionId);
     if (existing) {
+      activeMcpSessionId = existing.id;
       return { id: existing.id, autoCreated: false };
     }
   }
 
-  // If sessionId === 'new', force creation of a new session
+  // 2. If 'new' is explicitly requested, force creation of a brand-new session
   if (sessionId === 'new') {
     const now = new Date();
-    const sessionName = `Session ${now.toISOString().replace('T', ' ').slice(0, 16)}`;
+    const sessionName = `Agent Session - ${now.toISOString().replace('T', ' ').slice(0, 16)}`;
     const newSession = await db.createSession(
       sessionName,
-      'Newly initialized agent execution session',
+      'Newly initialized execution session',
       agentId || 'MCP-Agent'
     );
+    activeMcpSessionId = newSession.id;
     return { id: newSession.id, autoCreated: true };
   }
 
-  // Check if an active session already exists in DB
-  const activeSessions = await db.getSessions('active');
-  if (activeSessions.length > 0) {
-    return { id: activeSessions[0].id, autoCreated: false };
+  // 3. If a session was already created or set during this active MCP execution session, reuse it
+  if (activeMcpSessionId) {
+    const session = await db.getSessionById(activeMcpSessionId);
+    if (session && session.status === 'active') {
+      return { id: session.id, autoCreated: false };
+    }
   }
 
-  // Auto-initialize a new active session if none exists
+  // 4. Otherwise (first access in session / no session_id provided):
+  // Automatically create a BRAND NEW session for the current task execution!
   const now = new Date();
-  const sessionName = `Auto Session ${now.toISOString().replace('T', ' ').slice(0, 16)}`;
+  const sessionName = `Agent Session - ${now.toISOString().replace('T', ' ').slice(0, 16)}`;
   const newSession = await db.createSession(
     sessionName,
-    'Automatically initialized session for task execution',
+    'Automatically initialized execution session on first MCP access',
     agentId || 'MCP-Agent'
   );
+  activeMcpSessionId = newSession.id;
   return { id: newSession.id, autoCreated: true };
 }
 
@@ -232,6 +240,7 @@ export async function handleToolCall(name: string, args: any, agentId?: string) 
     switch (name) {
       case 'giramichi_create_session': {
         const session = await db.createSession(args.name, args.description, args.agent_id || agentId, args.workflow_id);
+        activeMcpSessionId = session.id;
         return {
           content: [
             {
