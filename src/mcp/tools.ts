@@ -189,6 +189,44 @@ function findNextTaskToImplement(tasks: any[]) {
   return pending[0];
 }
 
+export async function resolveOrCreateSession(sessionId?: string, agentId?: string): Promise<{ id: string; autoCreated: boolean }> {
+  // If an explicit session_id is provided (and not special keywords like 'all', 'new', 'auto'), check if it exists
+  if (sessionId && sessionId !== 'all' && sessionId !== 'new' && sessionId !== 'auto') {
+    const existing = await db.getSessionById(sessionId);
+    if (existing) {
+      return { id: existing.id, autoCreated: false };
+    }
+  }
+
+  // If sessionId === 'new', force creation of a new session
+  if (sessionId === 'new') {
+    const now = new Date();
+    const sessionName = `Session ${now.toISOString().replace('T', ' ').slice(0, 16)}`;
+    const newSession = await db.createSession(
+      sessionName,
+      'Newly initialized agent execution session',
+      agentId || 'MCP-Agent'
+    );
+    return { id: newSession.id, autoCreated: true };
+  }
+
+  // Check if an active session already exists in DB
+  const activeSessions = await db.getSessions('active');
+  if (activeSessions.length > 0) {
+    return { id: activeSessions[0].id, autoCreated: false };
+  }
+
+  // Auto-initialize a new active session if none exists
+  const now = new Date();
+  const sessionName = `Auto Session ${now.toISOString().replace('T', ' ').slice(0, 16)}`;
+  const newSession = await db.createSession(
+    sessionName,
+    'Automatically initialized session for task execution',
+    agentId || 'MCP-Agent'
+  );
+  return { id: newSession.id, autoCreated: true };
+}
+
 export async function handleToolCall(name: string, args: any, agentId?: string) {
   try {
     switch (name) {
@@ -271,24 +309,31 @@ export async function handleToolCall(name: string, args: any, agentId?: string) 
       }
 
       case 'giramichi_create_task': {
-        const task = await db.createTask(args.title, args.description, args.status_id, args.priority, args.tags, {}, args.session_id, args.order, agentId);
+        const { id: targetSessionId, autoCreated } = await resolveOrCreateSession(args.session_id, agentId);
+        const task = await db.createTask(args.title, args.description, args.status_id, args.priority, args.tags, {}, targetSessionId, args.order, agentId);
         return {
           content: [
             {
               type: 'text',
-              text: JSON.stringify({ success: true, message: `Task [${task.id}] created in session [${task.session_id}] with order [${task.order}] under status [${task.status_id}].`, task }, null, 2),
+              text: JSON.stringify({
+                success: true,
+                message: `Task [${task.id}] created in session [${task.session_id}] with order [${task.order}] under status [${task.status_id}].`,
+                auto_created_session: autoCreated,
+                task,
+              }, null, 2),
             },
           ],
         };
       }
 
       case 'giramichi_batch_create_tasks': {
-        const created = await db.batchCreateTasks(args.tasks, args.session_id, agentId);
+        const { id: targetSessionId, autoCreated } = await resolveOrCreateSession(args.session_id, agentId);
+        const created = await db.batchCreateTasks(args.tasks, targetSessionId, agentId);
         return {
           content: [
             {
               type: 'text',
-              text: JSON.stringify({ success: true, count: created.length, tasks: created }, null, 2),
+              text: JSON.stringify({ success: true, count: created.length, auto_created_session: autoCreated, target_session_id: targetSessionId, tasks: created }, null, 2),
             },
           ],
         };
@@ -325,8 +370,7 @@ export async function handleToolCall(name: string, args: any, agentId?: string) 
       }
 
       case 'giramichi_get_board': {
-        const activeSession = await db.getActiveSession();
-        const targetSessionId = args.session_id || activeSession.id;
+        const { id: targetSessionId, autoCreated } = await resolveOrCreateSession(args.session_id, agentId);
         const workflow = await db.getActiveWorkflow();
         const tasks = await db.getTasks(workflow.id, targetSessionId);
         const logs = await db.getActivityLogs(20, targetSessionId);
@@ -336,7 +380,7 @@ export async function handleToolCall(name: string, args: any, agentId?: string) 
           content: [
             {
               type: 'text',
-              text: JSON.stringify({ workflow, active_session_id: targetSessionId, sessions, total_tasks: tasks.length, next_task_to_implement: nextTask, tasks, recent_logs: logs }, null, 2),
+              text: JSON.stringify({ workflow, active_session_id: targetSessionId, auto_created_session: autoCreated, sessions, total_tasks: tasks.length, next_task_to_implement: nextTask, tasks, recent_logs: logs }, null, 2),
             },
           ],
         };
