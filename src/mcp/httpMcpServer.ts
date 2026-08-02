@@ -62,7 +62,7 @@ export function createHttpMcpRouter(): Router {
           end: () => mockRes,
           writeHead: () => mockRes
         };
-        await transport.handlePostMessage(mockReq, mockRes);
+        await transport.handlePostMessage(mockReq, mockRes, remoteBody);
       } catch (err: any) {
         console.error(`[Giramichi MCP HTTP] Error handling Redis Pub/Sub message for ${transport.sessionId}:`, err);
       }
@@ -109,7 +109,7 @@ export function createHttpMcpRouter(): Router {
     }
 
     try {
-      await transport.handlePostMessage(req, res);
+      await transport.handlePostMessage(req, res, req.body);
     } catch (err: any) {
       console.error(`[Giramichi MCP HTTP] Error handling SSE message for session ${sessionId}:`, err);
       if (!res.headersSent) {
