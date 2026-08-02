@@ -48,6 +48,32 @@ test.describe('Giramichi API Endpoints Tests', () => {
       expect(Array.isArray(body.logs)).toBe(true);
     });
 
+    test('GET /api/sessions?status=active - should return only active sessions', async ({ request }) => {
+      const response = await request.get(`${API_BASE_URL}/api/sessions?status=active`);
+      expect(response.status()).toBe(200);
+
+      const body = await response.json();
+      expect(body.success).toBe(true);
+      expect(Array.isArray(body.sessions)).toBe(true);
+      for (const session of body.sessions) {
+        expect(session.status).toBe('active');
+      }
+    });
+
+    test('GET /api/board?session_id - should return board filtered by target session ID', async ({ request }) => {
+      const sessionsRes = await request.get(`${API_BASE_URL}/api/sessions`);
+      const sessionsBody = await sessionsRes.json();
+      const targetSessionId = sessionsBody.activeSessionId;
+
+      const response = await request.get(`${API_BASE_URL}/api/board?session_id=${targetSessionId}`);
+      expect(response.status()).toBe(200);
+
+      const body = await response.json();
+      expect(body.success).toBe(true);
+      expect(body.activeSessionId).toBe(targetSessionId);
+      expect(Array.isArray(body.tasks)).toBe(true);
+    });
+
     test('GET /api/workflows - should return available workflows', async ({ request }) => {
       const response = await request.get(`${API_BASE_URL}/api/workflows`);
       expect(response.status()).toBe(200);
@@ -60,7 +86,7 @@ test.describe('Giramichi API Endpoints Tests', () => {
   });
 
   test.describe('2. Tasks, Activity Log & Error Handling', () => {
-    test('GET /api/tasks/:id - should return specific task details', async ({ request }) => {
+    test('GET /api/tasks/:id - should return specific task details with activity logs', async ({ request }) => {
       const boardRes = await request.get(`${API_BASE_URL}/api/board`);
       const boardBody = await boardRes.json();
       const firstTask = boardBody.tasks[0];
@@ -74,6 +100,8 @@ test.describe('Giramichi API Endpoints Tests', () => {
         expect(body.task).toBeDefined();
         expect(body.task.id).toBe(firstTask.id);
         expect(body.task.title).toBe(firstTask.title);
+        expect(body.task.status_id).toBeDefined();
+        expect(body.task.priority).toBeDefined();
         expect(Array.isArray(body.logs)).toBe(true);
       }
     });
@@ -105,6 +133,25 @@ test.describe('Giramichi API Endpoints Tests', () => {
       expect(body.success).toBe(true);
       expect(Array.isArray(body.logs)).toBe(true);
       expect(body.logs.length).toBeLessThanOrEqual(limit);
+    });
+
+    test('GET /api/activity?session_id - should fetch activity logs filtered by session ID', async ({ request }) => {
+      const sessionsRes = await request.get(`${API_BASE_URL}/api/sessions`);
+      const sessionsBody = await sessionsRes.json();
+      const targetSessionId = sessionsBody.activeSessionId;
+
+      const response = await request.get(`${API_BASE_URL}/api/activity?session_id=${targetSessionId}&limit=5`);
+      expect(response.status()).toBe(200);
+
+      const body = await response.json();
+      expect(body.success).toBe(true);
+      expect(Array.isArray(body.logs)).toBe(true);
+      expect(body.logs.length).toBeLessThanOrEqual(5);
+      for (const log of body.logs) {
+        if (log.session_id) {
+          expect(log.session_id).toBe(targetSessionId);
+        }
+      }
     });
   });
 
@@ -155,3 +202,4 @@ test.describe('Giramichi API Endpoints Tests', () => {
     });
   });
 });
+

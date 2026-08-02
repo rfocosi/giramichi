@@ -134,7 +134,64 @@ test.describe('Giramichi MCP Server HTTP Endpoints Spec', () => {
       expect(text).toContain('jsonrpc');
       expect(text).toContain('logs');
     });
+
+    test('POST /mcp - tools/call - should execute giramichi_create_session tool call', async ({ request }) => {
+      expect(mcpSessionId).not.toBe('');
+
+      const response = await request.post(`${MCP_BASE_URL}/mcp`, {
+        headers: {
+          'Accept': 'application/json, text/event-stream',
+          'Content-Type': 'application/json',
+          'mcp-session-id': mcpSessionId,
+        },
+        data: {
+          jsonrpc: '2.0',
+          id: 5,
+          method: 'tools/call',
+          params: {
+            name: 'giramichi_create_session',
+            arguments: {
+              name: 'Playwright Test Session',
+              description: 'Created during MCP API test run',
+              agent_id: 'Playwright-Tester',
+            },
+          },
+        },
+      });
+
+      expect(response.status()).toBe(200);
+      const text = await response.text();
+      expect(text).toContain('jsonrpc');
+      expect(text).toContain('Playwright Test Session');
+    });
+
+    test('POST /mcp - tools/call - should handle unknown tool gracefully', async ({ request }) => {
+      expect(mcpSessionId).not.toBe('');
+
+      const response = await request.post(`${MCP_BASE_URL}/mcp`, {
+        headers: {
+          'Accept': 'application/json, text/event-stream',
+          'Content-Type': 'application/json',
+          'mcp-session-id': mcpSessionId,
+        },
+        data: {
+          jsonrpc: '2.0',
+          id: 6,
+          method: 'tools/call',
+          params: {
+            name: 'non_existent_tool_xyz',
+            arguments: {},
+          },
+        },
+      });
+
+      expect(response.status()).toBe(200);
+      const text = await response.text();
+      expect(text).toContain('jsonrpc');
+      expect(text.toLowerCase()).toContain('unknown tool');
+    });
   });
+
 
   test.describe('2. SSE Transport & Endpoint Validation', () => {
     test('GET /mcp/sse - should establish SSE stream with correct headers', async () => {

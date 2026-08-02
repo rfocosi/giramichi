@@ -14,9 +14,11 @@
     "demo:docker": "VITE_DEMO=true docker compose up -d",
     "demo:cli": "tsx scripts/demo_ai_simulation.ts",
     "demo:device": "tsx scripts/demo_device_flow.ts",
-    "test:e2e": "playwright test",
+    "test:e2e": "playwright test tests/e2e",
     "test:api": "playwright test tests/api",
-    "test:mcp": "playwright test tests/api/mcp-server.spec.ts"
+    "test:mcp": "playwright test tests/api/mcp-server.spec.ts",
+    "test:unit": "playwright test tests/unit",
+    "test:all": "playwright test"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.6.0",
