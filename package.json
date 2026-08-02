@@ -12,7 +12,8 @@
     "mcp:http": "tsx src/mcp/httpMcpServer.ts",
     "demo": "tsx scripts/demo_ai_simulation.ts",
     "demo:device": "tsx scripts/demo_device_flow.ts",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:api": "playwright test tests/api"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.6.0",
