@@ -21,8 +21,6 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3001
-      - GIRAMICHI_API_URL=${GIRAMICHI_API_URL:-}
-      - VITE_DEMO=${VITE_DEMO:-false}
     ports:
       - "3001:3001"
     volumes:

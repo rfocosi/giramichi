@@ -57,25 +57,6 @@ test.describe('Giramichi API Endpoints Tests', () => {
       expect(Array.isArray(body.workflows)).toBe(true);
       expect(body.workflows.length).toBeGreaterThan(0);
     });
-
-    test('GET /api/config - should return dynamic frontend configuration', async ({ request }) => {
-      const response = await request.get(`${API_BASE_URL}/api/config`);
-      expect(response.status()).toBe(200);
-
-      const body = await response.json();
-      expect(body.success).toBe(true);
-      expect(body.config).toBeDefined();
-      expect(typeof body.config.apiUrl).toBe('string');
-    });
-
-    test('GET /config.js - should serve window.__CONFIG__ script', async ({ request }) => {
-      const response = await request.get(`${API_BASE_URL}/config.js`);
-      expect(response.status()).toBe(200);
-      expect(response.headers()['content-type']).toContain('javascript');
-
-      const text = await response.text();
-      expect(text).toContain('window.__CONFIG__ =');
-    });
   });
 
   test.describe('2. Tasks, Activity Log & Error Handling', () => {
