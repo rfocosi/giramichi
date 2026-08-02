@@ -13,7 +13,8 @@
     "demo": "tsx scripts/demo_ai_simulation.ts",
     "demo:device": "tsx scripts/demo_device_flow.ts",
     "test:e2e": "playwright test",
-    "test:api": "playwright test tests/api"
+    "test:api": "playwright test tests/api",
+    "test:mcp": "playwright test tests/api/mcp-server.spec.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.6.0",
