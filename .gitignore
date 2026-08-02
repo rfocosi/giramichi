@@ -56,3 +56,5 @@ ehthumbs.db
 Thumbs.db
 
 .agents/
+
+test-results/

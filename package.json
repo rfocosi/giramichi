@@ -11,7 +11,8 @@
     "mcp": "tsx src/mcp/mcpServer.ts",
     "mcp:http": "tsx src/mcp/httpMcpServer.ts",
     "demo": "tsx scripts/demo_ai_simulation.ts",
-    "demo:device": "tsx scripts/demo_device_flow.ts"
+    "demo:device": "tsx scripts/demo_device_flow.ts",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.6.0",
@@ -30,6 +31,7 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@types/better-sqlite3": "^7.6.12",
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
