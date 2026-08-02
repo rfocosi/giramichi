@@ -1,6 +1,6 @@
 # ==============================================================================
 # Unified Multi-Stage Dockerfile for Giramichi
-# Supports build targets: server, frontend, mcp
+# Supports build targets: server, frontend, mcp, mcp-stdio
 # Default target: server
 # ==============================================================================
 
@@ -74,3 +74,25 @@ EXPOSE 3002
 VOLUME ["/app/data"]
 
 CMD ["npm", "run", "mcp:http"]
+
+# ------------------------------------------------------------------------------
+# Target: MCP Stdio Server (Subprocess Stdio MCP Server)
+# ------------------------------------------------------------------------------
+FROM node:20-alpine AS mcp-stdio
+
+WORKDIR /app
+ENV NODE_ENV=production
+
+COPY package*.json ./
+COPY --from=node-builder /app/node_modules ./node_modules
+COPY --from=node-builder /app/dist ./dist
+COPY --from=node-builder /app/src ./src
+COPY --from=node-builder /app/tsconfig.json ./tsconfig.json
+
+RUN mkdir -p /app/data && chown -R node:node /app
+
+USER node
+VOLUME ["/app/data"]
+
+CMD ["./node_modules/.bin/tsx", "src/mcp/mcpServer.ts"]
+

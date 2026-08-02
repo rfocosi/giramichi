@@ -131,7 +131,24 @@ Launches the Vite development server (typically at `http://localhost:5173`). Ope
   ```
   Runs a standalone HTTP MCP server on `http://localhost:3002`.
 
-#### 4. Run the Interactive AI Simulation Demo
+#### 4. Running via Docker & Docker Compose 🐳
+
+- **Start Dashboard & API Backend**:
+  ```bash
+  docker compose up -d giramichi-server giramichi-frontend
+  ```
+  Access the Dashboard at `http://localhost:3000`.
+
+- **Run Stdio MCP in Docker**:
+  ```bash
+  # Build Stdio container
+  docker build -t giramichi-mcp-stdio -f Dockerfile.mcp-stdio .
+
+  # Run Stdio container
+  docker run -i --rm -v "$(pwd)/data:/app/data" giramichi-mcp-stdio
+  ```
+
+#### 5. Run the Interactive AI Simulation Demo
 
 To see Giramichi in action without connecting an external LLM, run the bundled AI simulation script:
 

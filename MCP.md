@@ -78,9 +78,14 @@ You can also spawn the MCP server directly as a subprocess using stdio:
   - Arguments: `["run", "mcp"]`
   - Working Directory (`cwd`): `/absolute/path/to/giramichi`
 
+- **Option C (Docker Container Mode - Isolated execution via Dockerfile.mcp-stdio)**:
+  - Build Image: `docker build -t giramichi-mcp-stdio -f Dockerfile.mcp-stdio .`
+  - Command: `docker`
+  - Arguments: `["run", "-i", "--rm", "-v", "/absolute/path/to/giramichi/data:/app/data", "giramichi-mcp-stdio"]`
+
 > ⚠️ **Note**: Always replace `/absolute/path/to/giramichi` with the full absolute file path on your local filesystem (e.g., `/home/username/workspace/giramichi` or `C:\Users\username\workspace\giramichi`).
 
-> ⚠️ **Stdio Corruption**: Never use `console.log` in any file imported by `mcpServer.ts`. Standard output is strictly reserved for MCP JSON-RPC messages. Use `console.error` for all diagnostic logging.
+> ⚠️ **Stdio Corruption**: Never use `console.log` in any file imported by `mcpServer.ts`. Standard output is strictly reserved for MCP JSON-RPC messages. Use `console.error` for all diagnostic logging. `Dockerfile.mcp-stdio` directly invokes `tsx` to prevent `npm` stdout lifecycle messages from corrupting JSON-RPC frames.
 
 ---
 
@@ -348,6 +353,45 @@ curl -s -X POST http://<host>:3001/mcp \
   - **Fix**: Use `--transport sse-only` flag if connecting via `mcp-remote` to the SSE endpoint: `npx -y mcp-remote http://<host>:3001/mcp/sse --allow-http --transport sse-only`.
 
 - **Node/npm Not Found in GUI Clients**: Some GUI applications (like Claude Desktop or Cursor on macOS/Linux) do not inherit shell environment `$PATH` settings. If the server fails to connect, specify full paths to node/npm (e.g. `/usr/local/bin/npx` or `/home/user/.nvm/versions/node/v20.x.x/bin/npx`).
+
+---
+
+## 🐳 Docker Stdio & Dashboard Setup
+
+To run both the **Giramichi Read-Only Dashboard** and the **Stdio MCP Server** concurrently sharing real-time database state:
+
+1. **Start Dashboard & API Backend in Docker**:
+   ```bash
+   docker compose up -d giramichi-server giramichi-frontend
+   ```
+   - Dashboard: `http://localhost:3000`
+   - Express Server: `http://localhost:3001`
+
+2. **Build the Stdio MCP Docker Image**:
+   ```bash
+   docker build -t giramichi-mcp-stdio -f Dockerfile.mcp-stdio .
+   ```
+
+3. **Configure your AI Client for Docker Stdio**:
+   ```json
+   {
+     "mcpServers": {
+       "giramichi": {
+         "command": "docker",
+         "args": [
+           "run",
+           "-i",
+           "--rm",
+           "-v",
+           "/absolute/path/to/giramichi/data:/app/data",
+           "giramichi-mcp-stdio"
+         ]
+       }
+     }
+   }
+   ```
+   *SQLite's WAL mode allows the Stdio container and the Web Dashboard backend to perform concurrent operations on `./data/giramichi.db` in real time.*
+
 
 - **Stdio Corruption**: Do not add `console.log` statements to `mcpServer.ts` or any file it imports, as standard output is strictly reserved for MCP JSON-RPC protocol communication. Use `console.error` for internal server logging.
 
