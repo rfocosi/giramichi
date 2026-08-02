@@ -34,6 +34,12 @@ export function createHttpMcpRouter(): Router {
   router.get('/sse', async (req: Request, res: Response) => {
     console.log('[Giramichi MCP HTTP] Incoming SSE connection request');
 
+    // Explicitly set SSE stream headers to prevent Nginx/Express from closing connection
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+
     // Determine post endpoint URL based on current router mounting path
     const baseUrl = req.baseUrl || '/mcp';
     const postEndpoint = `${baseUrl}/messages`;
