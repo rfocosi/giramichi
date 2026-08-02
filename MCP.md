@@ -209,12 +209,30 @@ Add Giramichi to `~/.codeium/windsurf/mcp_config.json`:
 
 Add Giramichi to `.agents/mcp_config.json` in your workspace root or global Antigravity config `~/.gemini/config/mcp_config.json`:
 
-#### For Remote Streamable HTTP Mode (`serverUrl`):
+#### Option A: Direct Remote SSE / HTTP Mode (`serverUrl`):
 ```json
 {
   "mcpServers": {
     "giramichi": {
-      "serverUrl": "http://192.168.50.10:3001/mcp"
+      "serverUrl": "http://192.168.50.10:3001/mcp/sse"
+    }
+  }
+}
+```
+
+#### Option B: Remote SSE Bridge via `mcp-remote` (Recommended for HTTP SSE):
+If your IDE encounters network buffering or non-HTTPS SSE stream errors, use `mcp-remote` to bridge remote SSE over local stdio:
+```json
+{
+  "mcpServers": {
+    "giramichi": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "http://192.168.50.10:3001/mcp/sse",
+        "--allow-http"
+      ]
     }
   }
 }

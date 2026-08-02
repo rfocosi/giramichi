@@ -121,18 +121,6 @@ export function createHttpMcpRouter(): Router {
     }
   });
 
-  // POST /sse (or /mcp/sse) - Dual-mode handler for http-first client strategy & SSE post messages
-  router.post('/sse', async (req: Request, res: Response) => {
-    const sessionId = (req.query.sessionId as string) || (req.headers['mcp-session-id'] as string);
-    if (sessionId) {
-      const transport = sseTransports.get(sessionId);
-      if (transport) {
-        return transport.handlePostMessage(req, res, req.body);
-      }
-    }
-    // Fallback to Streamable HTTP handler for clients probing POST /mcp/sse
-    return handleStreamableHttp(req, res);
-  });
 
   // POST /messages (or /mcp/messages) - Handles client messages for active SSE session
   router.post('/messages', async (req: Request, res: Response) => {
