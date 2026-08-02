@@ -5,7 +5,7 @@ import { KanbanBoard } from './components/KanbanBoard.js';
 import { ActivityLogStream } from './components/ActivityLogStream.js';
 import { TaskDetailModal } from './components/TaskDetailModal.js';
 import { TagFilterBar } from './components/TagFilterBar.js';
-import { fetchConfig, buildApiUrl } from './config.js';
+import { fetchConfig, buildApiUrl, isDemoMode } from './config.js';
 
 export const App: React.FC = () => {
   const [workflow, setWorkflow] = useState<Workflow | null>(null);
@@ -140,6 +140,10 @@ export const App: React.FC = () => {
 
   // Run a multi-agent simulation demo over MCP
   const handleTriggerSim = async () => {
+    if (!isDemoMode()) {
+      console.warn('[Giramichi] Simulation demo task creation blocked: demo mode is not active.');
+      return;
+    }
     setIsSimulating(true);
     try {
       // Step 1: Agent 1 creates Session A ("Payment Service Agent")
