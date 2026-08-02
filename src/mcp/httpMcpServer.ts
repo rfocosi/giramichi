@@ -32,22 +32,27 @@ export function createHttpMcpRouter(): Router {
     let transport = sessionId ? streamableTransports.get(sessionId) : undefined;
 
     if (!transport) {
+      // Pre-generate a session ID so the transport is stored in the map
+      // BEFORE handleRequest is called. This prevents a race condition where
+      // follow-up requests (e.g. notifications/initialized) arrive while the
+      // initialize POST is still being processed and find no session in the map.
+      const newSessionId = randomUUID();
+
       transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: () => randomUUID(),
+        sessionIdGenerator: () => newSessionId,
       });
 
       const server = createMCPServer();
       await server.connect(transport);
 
-      if (transport.sessionId) {
-        streamableTransports.set(transport.sessionId, transport);
-      }
+      // Store immediately using the pre-generated ID so subsequent requests
+      // with mcp-session-id: newSessionId can find this transport at once.
+      streamableTransports.set(newSessionId, transport);
+      console.log(`[Giramichi MCP HTTP] Streamable HTTP Session created: ${newSessionId}`);
 
       transport.onclose = () => {
-        if (transport?.sessionId) {
-          console.log(`[Giramichi MCP HTTP] Streamable HTTP Session closed: ${transport.sessionId}`);
-          streamableTransports.delete(transport.sessionId);
-        }
+        console.log(`[Giramichi MCP HTTP] Streamable HTTP Session closed: ${newSessionId}`);
+        streamableTransports.delete(newSessionId);
       };
     }
 
