@@ -2,7 +2,7 @@
 
 > **Model Context Protocol (MCP) Server Setup & Connection Guide**
 
-[Giramichi](README.md) exposes an autonomous project management control plane through a Model Context Protocol (MCP) server running on standard input/output (`stdio`). This allows modern AI coding assistants and development interfaces—such as **Claude Desktop**, **Claude Code**, **OpenCode**, **GitHub Copilot**, **Cursor**, **Windsurf**, **Google Antigravity**, and **Cline**—to create workflows, manage tasks, and update Kanban card statuses programmatically.
+[Giramichi](README.md) exposes an autonomous project management control plane through a Model Context Protocol (MCP) server. It supports **Stdio**, **SSE**, and **Streamable HTTP** transports, allowing modern AI coding assistants—such as **Claude Desktop**, **Claude Code**, **OpenCode**, **GitHub Copilot**, **Cursor**, **Windsurf**, **Google Antigravity**, and **Cline**—to create workflows, manage tasks, and update Kanban card statuses programmatically.
 
 ---
 
@@ -29,15 +29,29 @@ Giramichi supports both **Stdio** and **HTTP** transports for MCP integration:
 ### 1. HTTP MCP Transport (Remote / Local Server Mode)
 When running the Giramichi server (`npm run server` or `npm run mcp:http`), Giramichi exposes HTTP MCP endpoints:
 
-- **Streamable HTTP Endpoint** (Latest MCP HTTP Spec):
-  - URL: `http://localhost:3001/mcp` (or `http://localhost:3002/mcp` when running standalone `npm run mcp:http`)
-  - Supports both `GET` (stream) and `POST` (request) modes.
+- **Streamable HTTP Endpoint** (MCP 2024-11-05 spec — recommended for remote connections):
+  - URL: `http://localhost:3001/mcp`
+  - Requires `POST` with `Accept: application/json, text/event-stream` header.
+  - Returns `mcp-session-id` header — use it in subsequent requests.
 
-- **SSE Transport Stream Endpoint**:
-  - SSE Stream URL: `http://localhost:3001/mcp/sse`
-  - Message POST URL: `http://localhost:3001/mcp/messages`
+- **SSE Transport Endpoint** (Legacy compatibility):
+  - SSE Stream URL: `http://localhost:3001/mcp/sse` (`GET` only)
+  - Message POST URL: `http://localhost:3001/mcp/messages?sessionId=<UUID>`
 
-#### Example HTTP Server MCP Configuration (JSON):
+> ⚠️ **Important**: The `/mcp/sse` SSE endpoint only accepts `GET` requests. To post messages to an SSE session, use `/mcp/messages?sessionId=<UUID>`. Do not POST to `/mcp/sse`.
+
+#### Example: Streamable HTTP configuration
+```json
+{
+  "mcpServers": {
+    "giramichi": {
+      "serverUrl": "http://localhost:3001/mcp"
+    }
+  }
+}
+```
+
+#### Example: SSE configuration
 ```json
 {
   "mcpServers": {
@@ -48,34 +62,25 @@ When running the Giramichi server (`npm run server` or `npm run mcp:http`), Gira
   }
 }
 ```
-Or for Streamable HTTP clients:
-```json
-{
-  "mcpServers": {
-    "giramichi": {
-      "url": "http://localhost:3001/mcp",
-      "type": "http"
-    }
-  }
-}
-```
 
 ---
 
 ### 2. Stdio MCP Transport (Local Process Mode)
 You can also spawn the MCP server directly as a subprocess using stdio:
 
-- **Option A (Recommended - npm script)**:
-  - Command: `npm`
-  - Arguments: `["run", "mcp"]`
-  - Working Directory (`cwd`): `/absolute/path/to/giramichi`
-
-- **Option B (Direct tsx execution)**:
+- **Option A (Recommended - direct tsx execution, avoids npm stdout pollution)**:
   - Command: `npx`
   - Arguments: `["-y", "tsx", "/absolute/path/to/giramichi/src/mcp/mcpServer.ts"]`
   - Working Directory (`cwd`): `/absolute/path/to/giramichi`
 
+- **Option B (npm script)**:
+  - Command: `npm`
+  - Arguments: `["run", "mcp"]`
+  - Working Directory (`cwd`): `/absolute/path/to/giramichi`
+
 > ⚠️ **Note**: Always replace `/absolute/path/to/giramichi` with the full absolute file path on your local filesystem (e.g., `/home/username/workspace/giramichi` or `C:\Users\username\workspace\giramichi`).
+
+> ⚠️ **Stdio Corruption**: Never use `console.log` in any file imported by `mcpServer.ts`. Standard output is strictly reserved for MCP JSON-RPC messages. Use `console.error` for all diagnostic logging.
 
 ---
 
@@ -93,8 +98,8 @@ You can also spawn the MCP server directly as a subprocess using stdio:
 {
   "mcpServers": {
     "giramichi": {
-      "command": "npm",
-      "args": ["run", "mcp"],
+      "command": "npx",
+      "args": ["-y", "tsx", "/path/to/giramichi/src/mcp/mcpServer.ts"],
       "cwd": "/path/to/giramichi"
     }
   }
@@ -106,12 +111,6 @@ You can also spawn the MCP server directly as a subprocess using stdio:
 ### 2. Claude Code (CLI)
 
 Add Giramichi directly to Claude Code CLI using the `mcp add` command:
-
-```bash
-claude mcp add giramichi -- npm run mcp --prefix /path/to/giramichi
-```
-
-Or via direct tsx script:
 
 ```bash
 claude mcp add giramichi -- npx -y tsx /path/to/giramichi/src/mcp/mcpServer.ts
@@ -132,8 +131,8 @@ Add Giramichi to your OpenCode configuration in `.opencode/mcp.json` or global c
 {
   "mcpServers": {
     "giramichi": {
-      "command": "npm",
-      "args": ["run", "mcp"],
+      "command": "npx",
+      "args": ["-y", "tsx", "/path/to/giramichi/src/mcp/mcpServer.ts"],
       "cwd": "/path/to/giramichi"
     }
   }
@@ -151,8 +150,8 @@ To enable Giramichi MCP tools in VS Code for GitHub Copilot Agent mode, create o
 {
   "mcpServers": {
     "giramichi": {
-      "command": "npm",
-      "args": ["run", "mcp"],
+      "command": "npx",
+      "args": ["-y", "tsx", "/path/to/giramichi/src/mcp/mcpServer.ts"],
       "cwd": "/path/to/giramichi"
     }
   }
@@ -169,7 +168,7 @@ To enable Giramichi MCP tools in VS Code for GitHub Copilot Agent mode, create o
 3. Fill in the details:
    - **Name**: `giramichi`
    - **Type**: `stdio`
-   - **Command**: `npm run mcp` (or full path to npm/npx)
+   - **Command**: `npx -y tsx /path/to/giramichi/src/mcp/mcpServer.ts`
    - **Directory**: `/path/to/giramichi`
 
 #### Via Configuration File (`.cursor/mcp.json` or `~/.cursor/mcp.json`):
@@ -177,8 +176,8 @@ To enable Giramichi MCP tools in VS Code for GitHub Copilot Agent mode, create o
 {
   "mcpServers": {
     "giramichi": {
-      "command": "npm",
-      "args": ["run", "mcp"],
+      "command": "npx",
+      "args": ["-y", "tsx", "/path/to/giramichi/src/mcp/mcpServer.ts"],
       "cwd": "/path/to/giramichi"
     }
   }
@@ -195,8 +194,8 @@ Add Giramichi to `~/.codeium/windsurf/mcp_config.json`:
 {
   "mcpServers": {
     "giramichi": {
-      "command": "npm",
-      "args": ["run", "mcp"],
+      "command": "npx",
+      "args": ["-y", "tsx", "/path/to/giramichi/src/mcp/mcpServer.ts"],
       "cwd": "/path/to/giramichi"
     }
   }
@@ -207,21 +206,21 @@ Add Giramichi to `~/.codeium/windsurf/mcp_config.json`:
 
 ### 7. Google Antigravity IDE & AGY CLI
 
-Add Giramichi to `.agents/mcp_config.json` in your workspace root or global Antigravity config `~/.gemini/config/mcp_config.json`:
+Antigravity uses `mcp_config.json` (not `mcp.json`). Add Giramichi to `.agents/mcp_config.json` in your workspace root or global config `~/.gemini/config/mcp_config.json`.
 
-#### Option A: Direct Remote SSE / HTTP Mode (`serverUrl`):
+#### Option A: Remote Streamable HTTP (`serverUrl`) — Recommended
+Requires the Giramichi HTTP server to be running (e.g. deployed via Docker):
 ```json
 {
   "mcpServers": {
     "giramichi": {
-      "serverUrl": "http://192.168.50.10:3001/mcp/sse"
+      "serverUrl": "http://<host>:3001/mcp"
     }
   }
 }
 ```
 
-#### Option B: Remote SSE Bridge via `mcp-remote` (Recommended for HTTP SSE):
-If your IDE encounters network buffering or non-HTTPS SSE stream errors, use `mcp-remote` to bridge remote SSE over local stdio:
+#### Option B: Local Stdio — for local development
 ```json
 {
   "mcpServers": {
@@ -229,27 +228,16 @@ If your IDE encounters network buffering or non-HTTPS SSE stream errors, use `mc
       "command": "npx",
       "args": [
         "-y",
-        "mcp-remote",
-        "http://192.168.50.10:3001/mcp/sse",
-        "--allow-http"
-      ]
+        "tsx",
+        "/absolute/path/to/giramichi/src/mcp/mcpServer.ts"
+      ],
+      "cwd": "/absolute/path/to/giramichi"
     }
   }
 }
 ```
 
-#### For Stdio Mode (`command` + `args`):
-```json
-{
-  "mcpServers": {
-    "giramichi": {
-      "command": "npm",
-      "args": ["run", "mcp"],
-      "cwd": "/path/to/giramichi"
-    }
-  }
-}
-```
+> 💡 **Note**: Antigravity's `serverUrl` uses the **Streamable HTTP** transport. Always point it to `/mcp` (not `/mcp/sse`). The `/mcp` endpoint handles the full MCP handshake (`initialize` → `notifications/initialized` → tool calls) correctly.
 
 ---
 
@@ -263,8 +251,8 @@ If your IDE encounters network buffering or non-HTTPS SSE stream errors, use `mc
 {
   "mcpServers": {
     "giramichi": {
-      "command": "npm",
-      "args": ["run", "mcp"],
+      "command": "npx",
+      "args": ["-y", "tsx", "/path/to/giramichi/src/mcp/mcpServer.ts"],
       "cwd": "/path/to/giramichi"
     }
   }
@@ -282,8 +270,8 @@ Edit `~/.config/zed/settings.json` or `.zed/settings.json`:
   "context_servers": {
     "giramichi": {
       "command": {
-        "path": "npm",
-        "args": ["run", "mcp"],
+        "path": "npx",
+        "args": ["-y", "tsx", "/path/to/giramichi/src/mcp/mcpServer.ts"],
         "cwd": "/path/to/giramichi"
       }
     }
@@ -295,10 +283,14 @@ Edit `~/.config/zed/settings.json` or `.zed/settings.json`:
 
 ## 🧰 Available MCP Tools
 
-Once connected, your AI assistant will have access to 8 native Giramichi MCP tools:
+Once connected, your AI assistant will have access to 12 native Giramichi MCP tools:
 
 | Tool | Description | Key Arguments |
 | :--- | :--- | :--- |
+| `giramichi_create_session` | Create a new agent session. | `name`, `description`, `agent_id` |
+| `giramichi_list_sessions` | List all sessions. | `status` (optional filter) |
+| `giramichi_get_session` | Get details of a specific session. | `session_id` |
+| `giramichi_close_session` | Close an active session. | `session_id` |
 | `giramichi_create_workflow` | Create a custom workflow lifecycle with status columns and set it active. | `name`, `description`, `statuses` (array of `{ id, name, color, order, description }`) |
 | `giramichi_set_active_workflow` | Switch active workflow by ID. | `workflow_id` |
 | `giramichi_create_task` | Create a task card on the Kanban board. | `title`, `description`, `status_id`, `priority` (`low`/`medium`/`high`/`urgent`), `tags` |
@@ -317,26 +309,46 @@ Once connected, your AI assistant will have access to 8 native Giramichi MCP too
 You can test and inspect the MCP server interactive tool UI using the official Model Context Protocol Inspector:
 
 ```bash
-npx @modelcontextprotocol/inspector npm run mcp
-```
-
-Or directly via `tsx`:
-
-```bash
 npx @modelcontextprotocol/inspector npx tsx src/mcp/mcpServer.ts
 ```
 
 This starts a web-based inspector UI (typically at `http://localhost:5173`) where you can test invoking `giramichi_get_board`, `giramichi_create_task`, and `giramichi_move_task`.
+
+### Verifying the HTTP Endpoints
+
+Test the SSE endpoint:
+```bash
+curl -v http://<host>:3001/mcp/sse
+# Expected: event: endpoint  /  data: /mcp/messages?sessionId=<UUID>
+```
+
+Test the Streamable HTTP endpoint:
+```bash
+curl -s -X POST http://<host>:3001/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","method":"initialize","id":1,"params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
+# Expected: HTTP 200 with mcp-session-id header and initialize result in body
+```
 
 ---
 
 ## 🔍 Troubleshooting
 
 - **`failed to connect (session ID: ): session not found`**:
-  - **Cause**: Mismatch between `type` transport setting (`sse` vs `http`) and the configured URL path.
-  - **Fix for `type: "sse"`**: Ensure `/sse` is appended to the URL (e.g. `http://<host>:<port>/mcp/sse`). If you point an `sse` client to `/mcp`, it hits the Streamable HTTP handler instead of the SSE listener and fails to acquire a session ID.
-  - **Fix for `type: "http"`**: Point to `http://<host>:<port>/mcp`.
-  - **Verification**: Test the SSE endpoint with `curl -v http://<host>:<port>/mcp/sse`. You should see `event: endpoint` and `data: /mcp/messages?sessionId=<UUID>`.
-- **Node/npm Not Found in GUI Clients**: Some GUI applications (like Claude Desktop or Cursor on macOS/Linux) do not inherit shell environment `$PATH` settings. If the server fails to connect, specify full paths to node/npm (e.g. `/usr/local/bin/npm` or `/home/user/.nvm/versions/node/v20.x.x/bin/npm`).
-- **Stdio Corruption**: Do not add `console.log` statements to `mcpServer.ts` or imported files, as standard output is strictly reserved for MCP JSON-RPC protocol communication. Use `console.error` for internal server logging.
+  - **Cause**: The MCP client is configured as `type: "sse"` but the URL points to `/mcp` (Streamable HTTP) instead of `/mcp/sse`.
+  - **Fix**: Use `/mcp/sse` for SSE clients, or use `/mcp` with `serverUrl` (Streamable HTTP).
+
+- **`sending "notifications/initialized": Bad Request`**:
+  - **Cause**: The Streamable HTTP transport session was not properly stored after `initialize`, causing the follow-up notification to find no session.
+  - **Fix**: This is a known bug fixed in the current server version. Ensure you are running the latest image.
+
+- **`mcp-remote` `http-first` strategy errors against `/mcp/sse`**:
+  - **Cause**: `mcp-remote` tries `POST /mcp/sse` first (Streamable HTTP probe), which returns 404. If the server mistakenly handled it, the transports would be mismatched.
+  - **Fix**: Use `--transport sse-only` flag if connecting via `mcp-remote` to the SSE endpoint: `npx -y mcp-remote http://<host>:3001/mcp/sse --allow-http --transport sse-only`.
+
+- **Node/npm Not Found in GUI Clients**: Some GUI applications (like Claude Desktop or Cursor on macOS/Linux) do not inherit shell environment `$PATH` settings. If the server fails to connect, specify full paths to node/npm (e.g. `/usr/local/bin/npx` or `/home/user/.nvm/versions/node/v20.x.x/bin/npx`).
+
+- **Stdio Corruption**: Do not add `console.log` statements to `mcpServer.ts` or any file it imports, as standard output is strictly reserved for MCP JSON-RPC protocol communication. Use `console.error` for internal server logging.
+
 - **Database Permissions**: Ensure the `data/` directory is writable by the process running the MCP server.
