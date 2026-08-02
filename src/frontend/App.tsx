@@ -5,6 +5,7 @@ import { KanbanBoard } from './components/KanbanBoard.js';
 import { ActivityLogStream } from './components/ActivityLogStream.js';
 import { TaskDetailModal } from './components/TaskDetailModal.js';
 import { TagFilterBar } from './components/TagFilterBar.js';
+import { fetchConfig, buildApiUrl } from './config.js';
 
 export const App: React.FC = () => {
   const [workflow, setWorkflow] = useState<Workflow | null>(null);
@@ -16,6 +17,7 @@ export const App: React.FC = () => {
   const [isSimulating, setIsSimulating] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isActivityDrawerOpen, setIsActivityDrawerOpen] = useState(false);
+  const [configError, setConfigError] = useState<string | null>(null);
 
   // Tag Filtering State
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -24,7 +26,7 @@ export const App: React.FC = () => {
   // Fetch sessions list
   const fetchSessions = async () => {
     try {
-      const res = await fetch('/api/sessions');
+      const res = await fetch(buildApiUrl('/api/sessions'));
       const data = await res.json();
       if (data.success) {
         setSessionsList(data.sessions);
@@ -38,7 +40,7 @@ export const App: React.FC = () => {
   const fetchBoard = async (sessId = selectedSessionId) => {
     try {
       const url = sessId && sessId !== 'all' ? `/api/board?session_id=${encodeURIComponent(sessId)}` : '/api/board?session_id=all';
-      const res = await fetch(url);
+      const res = await fetch(buildApiUrl(url));
       const data = await res.json();
       if (data.success) {
         setWorkflow(data.workflow);
@@ -56,25 +58,40 @@ export const App: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchBoard(selectedSessionId);
-    fetchSessions();
+    let eventSource: EventSource | null = null;
 
-    // Subscribe to SSE stream for real-time live sync
-    const eventSource = new EventSource('/api/events');
-
-    eventSource.onmessage = (event) => {
+    const init = async () => {
       try {
-        const payload = JSON.parse(event.data);
-        console.log('[SSE Event Received]', payload);
+        await fetchConfig();
         fetchBoard(selectedSessionId);
         fetchSessions();
-      } catch (err) {
-        console.error('Failed to parse SSE payload:', err);
+
+        // Subscribe to SSE stream for real-time live sync
+        eventSource = new EventSource(buildApiUrl('/api/events'));
+
+        eventSource.onmessage = (event) => {
+          try {
+            const payload = JSON.parse(event.data);
+            console.log('[SSE Event Received]', payload);
+            fetchBoard(selectedSessionId);
+            fetchSessions();
+          } catch (err) {
+            console.error('Failed to parse SSE payload:', err);
+          }
+        };
+      } catch (err: any) {
+        console.error('Configuration Initialization Error:', err);
+        setConfigError(err.message || 'GIRAMICHI_API_URL is not defined');
+        setLoading(false);
       }
     };
 
+    init();
+
     return () => {
-      eventSource.close();
+      if (eventSource) {
+        eventSource.close();
+      }
     };
   }, [selectedSessionId]);
 
@@ -126,7 +143,7 @@ export const App: React.FC = () => {
     setIsSimulating(true);
     try {
       // Step 1: Agent 1 creates Session A ("Payment Service Agent")
-      const sessARes = await fetch('/api/mcp-direct', {
+      const sessARes = await fetch(buildApiUrl('/api/mcp-direct'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -142,7 +159,7 @@ export const App: React.FC = () => {
       const sessionA: Session = JSON.parse(sessAData.result.content[0].text).session;
 
       // Step 2: Agent 2 creates Session B ("Analytics Agent")
-      const sessBRes = await fetch('/api/mcp-direct', {
+      const sessBRes = await fetch(buildApiUrl('/api/mcp-direct'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -160,7 +177,7 @@ export const App: React.FC = () => {
       await new Promise((r) => setTimeout(r, 800));
 
       // Step 3: Agent 1 adds tasks to Session A
-      const batchARes = await fetch('/api/mcp-direct', {
+      const batchARes = await fetch(buildApiUrl('/api/mcp-direct'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -190,7 +207,7 @@ export const App: React.FC = () => {
       const tasksA: Task[] = JSON.parse(batchAData.result.content[0].text).tasks;
 
       // Step 4: Agent 2 adds tasks to Session B
-      await fetch('/api/mcp-direct', {
+      await fetch(buildApiUrl('/api/mcp-direct'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -214,7 +231,7 @@ export const App: React.FC = () => {
 
       // Step 5: Agent 1 moves Stripe Task in Session A to In Progress -> Done
       if (tasksA.length > 0) {
-        await fetch('/api/mcp-direct', {
+        await fetch(buildApiUrl('/api/mcp-direct'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -229,7 +246,7 @@ export const App: React.FC = () => {
 
         await new Promise((r) => setTimeout(r, 1200));
 
-        await fetch('/api/mcp-direct', {
+        await fetch(buildApiUrl('/api/mcp-direct'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -250,6 +267,17 @@ export const App: React.FC = () => {
       fetchSessions();
     }
   };
+
+  if (configError) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', backgroundColor: '#0f172a', color: '#ef4444' }}>
+        <div style={{ textAlign: 'center', padding: '32px 48px', backgroundColor: '#1e293b', borderRadius: '12px', border: '1px solid #ef4444', maxWidth: '500px' }}>
+          <h2 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '12px' }}>Initialization Error</h2>
+          <p style={{ color: '#fca5a5', fontSize: '15px', lineHeight: '1.5' }}>{configError}</p>
+        </div>
+      </div>
+    );
+  }
 
   if (loading || !workflow) {
     return (

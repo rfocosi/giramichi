@@ -24,6 +24,10 @@ FROM nginx:alpine AS runner
 # Copy compiled frontend assets from build stage
 COPY --from=builder /app/dist /usr/share/nginx/html
 
+# Entrypoint script to dynamically generate config.js from GIRAMICHI_API_URL at container startup
+COPY scripts/generate-frontend-config.sh /docker-entrypoint.d/40-generate-config.sh
+RUN chmod +x /docker-entrypoint.d/40-generate-config.sh
+
 EXPOSE 80
 
 CMD ["nginx", "-g", "daemon off;"]

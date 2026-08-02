@@ -18,12 +18,18 @@ export default defineConfig({
       url: 'http://localhost:3001/api/sessions',
       reuseExistingServer: !process.env.CI,
       timeout: 120 * 1000,
+      env: {
+        GIRAMICHI_API_URL: 'http://localhost:3001',
+      },
     },
     {
       command: 'npm run dev',
       url: 'http://localhost:3000',
       reuseExistingServer: !process.env.CI,
       timeout: 120 * 1000,
+      env: {
+        GIRAMICHI_API_URL: 'http://localhost:3001',
+      },
     },
   ],
   projects: [

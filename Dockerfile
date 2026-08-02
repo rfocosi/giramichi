@@ -48,6 +48,8 @@ CMD ["npm", "run", "server"]
 FROM nginx:alpine AS frontend
 
 COPY --from=node-builder /app/dist /usr/share/nginx/html
+COPY scripts/generate-frontend-config.sh /docker-entrypoint.d/40-generate-config.sh
+RUN chmod +x /docker-entrypoint.d/40-generate-config.sh
 
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]

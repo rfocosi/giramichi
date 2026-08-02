@@ -21,6 +21,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3001
+      - GIRAMICHI_API_URL=${GIRAMICHI_API_URL:-}
     ports:
       - "3001:3001"
     volumes:
@@ -32,6 +33,8 @@ services:
       context: .
       dockerfile: Dockerfile.frontend
     container_name: giramichi-frontend
+    environment:
+      - GIRAMICHI_API_URL=${GIRAMICHI_API_URL:-}
     ports:
       - "3000:80"
     depends_on:
