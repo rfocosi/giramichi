@@ -32,6 +32,8 @@ jobs:
             dockerfile: Dockerfile.frontend
           - image-suffix: mcp
             dockerfile: Dockerfile.mcp
+          - image-suffix: mcp-stdio
+            dockerfile: Dockerfile.mcp-stdio
 
     steps:
       - name: Checkout repository
