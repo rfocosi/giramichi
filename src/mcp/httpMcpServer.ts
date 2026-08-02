@@ -26,6 +26,41 @@ export function createHttpMcpRouter(): Router {
   // Initialize Redis adapter (if REDIS_URL or REDIS_HOST is configured)
   initRedisAdapter();
 
+  // Helper function to handle Streamable HTTP transport requests
+  async function handleStreamableHttp(req: Request, res: Response) {
+    const sessionId = (req.headers['mcp-session-id'] as string) || (req.query.sessionId as string);
+    let transport = sessionId ? streamableTransports.get(sessionId) : undefined;
+
+    if (!transport) {
+      transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: () => randomUUID(),
+      });
+
+      const server = createMCPServer();
+      await server.connect(transport);
+
+      if (transport.sessionId) {
+        streamableTransports.set(transport.sessionId, transport);
+      }
+
+      transport.onclose = () => {
+        if (transport?.sessionId) {
+          console.log(`[Giramichi MCP HTTP] Streamable HTTP Session closed: ${transport.sessionId}`);
+          streamableTransports.delete(transport.sessionId);
+        }
+      };
+    }
+
+    try {
+      await transport.handleRequest(req, res, req.body);
+    } catch (err: any) {
+      console.error('[Giramichi MCP HTTP] Error handling Streamable HTTP request:', err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: err.message });
+      }
+    }
+  }
+
   // ---------------------------------------------------------
   // 1. SSE Transport Endpoints (Legacy / Compatibility Mode)
   // ---------------------------------------------------------
@@ -86,6 +121,19 @@ export function createHttpMcpRouter(): Router {
     }
   });
 
+  // POST /sse (or /mcp/sse) - Dual-mode handler for http-first client strategy & SSE post messages
+  router.post('/sse', async (req: Request, res: Response) => {
+    const sessionId = (req.query.sessionId as string) || (req.headers['mcp-session-id'] as string);
+    if (sessionId) {
+      const transport = sseTransports.get(sessionId);
+      if (transport) {
+        return transport.handlePostMessage(req, res, req.body);
+      }
+    }
+    // Fallback to Streamable HTTP handler for clients probing POST /mcp/sse
+    return handleStreamableHttp(req, res);
+  });
+
   // POST /messages (or /mcp/messages) - Handles client messages for active SSE session
   router.post('/messages', async (req: Request, res: Response) => {
     const sessionId = req.query.sessionId as string;
@@ -124,37 +172,7 @@ export function createHttpMcpRouter(): Router {
 
   // ALL / (or /mcp) - Streamable HTTP transport supporting GET & POST requests
   router.all('/', async (req: Request, res: Response) => {
-    const sessionId = (req.headers['mcp-session-id'] as string) || (req.query.sessionId as string);
-    let transport = sessionId ? streamableTransports.get(sessionId) : undefined;
-
-    if (!transport) {
-      transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: () => randomUUID(),
-      });
-
-      const server = createMCPServer();
-      await server.connect(transport);
-
-      if (transport.sessionId) {
-        streamableTransports.set(transport.sessionId, transport);
-      }
-
-      transport.onclose = () => {
-        if (transport?.sessionId) {
-          console.log(`[Giramichi MCP HTTP] Streamable HTTP Session closed: ${transport.sessionId}`);
-          streamableTransports.delete(transport.sessionId);
-        }
-      };
-    }
-
-    try {
-      await transport.handleRequest(req, res, req.body);
-    } catch (err: any) {
-      console.error('[Giramichi MCP HTTP] Error handling Streamable HTTP request:', err);
-      if (!res.headersSent) {
-        res.status(500).json({ error: err.message });
-      }
-    }
+    return handleStreamableHttp(req, res);
   });
 
   return router;

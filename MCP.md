@@ -209,13 +209,12 @@ Add Giramichi to `~/.codeium/windsurf/mcp_config.json`:
 
 Add Giramichi to `.agents/mcp_config.json` in your workspace root or global Antigravity config `~/.gemini/config/mcp_config.json`:
 
-#### For Remote SSE Mode (`serverUrl`):
+#### For Remote Streamable HTTP Mode (`serverUrl`):
 ```json
 {
   "mcpServers": {
     "giramichi": {
-      "serverUrl": "http://192.168.50.10:3001/mcp/sse",
-      "headers": {}
+      "serverUrl": "http://192.168.50.10:3001/mcp"
     }
   }
 }
