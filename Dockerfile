@@ -43,11 +43,10 @@ VOLUME ["/app/data"]
 CMD ["npm", "run", "server"]
 
 # ------------------------------------------------------------------------------
-# Target: Frontend (React 19 + Vite + Nginx Reverse Proxy)
+# Target: Frontend (React 19 + Vite Static Web Server)
 # ------------------------------------------------------------------------------
 FROM nginx:alpine AS frontend
 
-COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=node-builder /app/dist /usr/share/nginx/html
 
 EXPOSE 80
