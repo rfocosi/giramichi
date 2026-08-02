@@ -6,6 +6,13 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { createMCPServer } from './mcpServer.js';
 import { authenticateAgent } from '../auth/middleware.js';
 
+import {
+  initRedisAdapter,
+  publishSessionMessage,
+  subscribeToSession,
+  unsubscribeFromSession
+} from './redisAdapter.js';
+
 // Map of active SSE transports by session ID
 const sseTransports = new Map<string, SSEServerTransport>();
 
@@ -15,6 +22,9 @@ const streamableTransports = new Map<string, StreamableHTTPServerTransport>();
 export function createHttpMcpRouter(): Router {
   const router = Router();
   router.use(authenticateAgent);
+
+  // Initialize Redis adapter (if REDIS_URL or REDIS_HOST is configured)
+  initRedisAdapter();
 
   // ---------------------------------------------------------
   // 1. SSE Transport Endpoints (Legacy / Compatibility Mode)
@@ -34,8 +44,27 @@ export function createHttpMcpRouter(): Router {
     sseTransports.set(transport.sessionId, transport);
     console.log(`[Giramichi MCP HTTP] SSE Session initialized: ${transport.sessionId}`);
 
+    // Register Redis Pub/Sub subscriber for cross-instance message routing
+    await subscribeToSession(transport.sessionId, async (remoteBody) => {
+      console.log(`[Giramichi MCP HTTP] Processing remote Pub/Sub message for session: ${transport.sessionId}`);
+      try {
+        const mockReq: any = { body: remoteBody, query: { sessionId: transport.sessionId }, headers: {} };
+        const mockRes: any = {
+          headersSent: false,
+          status: () => mockRes,
+          json: () => mockRes,
+          end: () => mockRes,
+          writeHead: () => mockRes
+        };
+        await transport.handlePostMessage(mockReq, mockRes);
+      } catch (err: any) {
+        console.error(`[Giramichi MCP HTTP] Error handling Redis Pub/Sub message for ${transport.sessionId}:`, err);
+      }
+    });
+
     transport.onclose = () => {
       console.log(`[Giramichi MCP HTTP] SSE Session closed: ${transport.sessionId}`);
+      unsubscribeFromSession(transport.sessionId);
       sseTransports.delete(transport.sessionId);
     };
 
@@ -43,6 +72,7 @@ export function createHttpMcpRouter(): Router {
       await server.connect(transport);
     } catch (err: any) {
       console.error('[Giramichi MCP HTTP] Error connecting SSE transport:', err);
+      unsubscribeFromSession(transport.sessionId);
       sseTransports.delete(transport.sessionId);
       if (!res.headersSent) {
         res.status(500).json({ error: 'Failed to initialize SSE connection' });
@@ -60,6 +90,14 @@ export function createHttpMcpRouter(): Router {
 
     const transport = sseTransports.get(sessionId);
     if (!transport) {
+      // Session not on this local pod: attempt routing via Redis Pub/Sub to the pod holding the session
+      const forwarded = await publishSessionMessage(sessionId, req.body);
+      if (forwarded) {
+        console.log(`[Giramichi MCP HTTP] Session '${sessionId}' hosted on another pod. Message routed via Redis Pub/Sub.`);
+        res.status(202).json({ status: 'accepted', sessionId });
+        return;
+      }
+
       res.status(404).json({ error: `SSE Session '${sessionId}' not found or has expired` });
       return;
     }
