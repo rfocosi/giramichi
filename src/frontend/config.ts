@@ -1,5 +1,8 @@
+/// <reference types="vite/client" />
+
 export interface AppConfig {
   apiUrl: string;
+  isDemo?: boolean;
 }
 
 declare global {
@@ -10,12 +13,24 @@ declare global {
 
 let appConfig: AppConfig = {
   apiUrl: '',
+  isDemo: false,
 };
 
 export const fetchConfig = async (): Promise<AppConfig> => {
-  // If window.__CONFIG__ has a non-empty apiUrl, use it
-  if (typeof window !== 'undefined' && window.__CONFIG__?.apiUrl) {
-    appConfig.apiUrl = window.__CONFIG__.apiUrl;
+  // Check VITE_DEMO environment variable
+  const metaEnv = (import.meta as any).env;
+  if (metaEnv && (metaEnv.VITE_DEMO === 'true' || metaEnv.VITE_DEMO === '1')) {
+    appConfig.isDemo = true;
+  }
+
+  // If window.__CONFIG__ has values, use them
+  if (typeof window !== 'undefined' && window.__CONFIG__) {
+    if (window.__CONFIG__.apiUrl) {
+      appConfig.apiUrl = window.__CONFIG__.apiUrl;
+    }
+    if (typeof window.__CONFIG__.isDemo === 'boolean') {
+      appConfig.isDemo = window.__CONFIG__.isDemo;
+    }
   }
 
   // Fetch dynamic runtime config from /api/config
@@ -25,6 +40,9 @@ export const fetchConfig = async (): Promise<AppConfig> => {
       const data = await res.json();
       if (data.success && typeof data.config?.apiUrl === 'string') {
         appConfig.apiUrl = data.config.apiUrl;
+      }
+      if (data.success && typeof data.config?.isDemo === 'boolean') {
+        appConfig.isDemo = appConfig.isDemo || data.config.isDemo;
       }
     }
   } catch (err) {
@@ -36,6 +54,14 @@ export const fetchConfig = async (): Promise<AppConfig> => {
   }
 
   return appConfig;
+};
+
+export const isDemoMode = (): boolean => {
+  const metaEnv = (import.meta as any).env;
+  if (metaEnv && (metaEnv.VITE_DEMO === 'true' || metaEnv.VITE_DEMO === '1')) {
+    return true;
+  }
+  return Boolean(appConfig.isDemo || (typeof window !== 'undefined' && window.__CONFIG__?.isDemo));
 };
 
 export const getApiUrl = (): string => {

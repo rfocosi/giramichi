@@ -1,6 +1,7 @@
 import React from 'react';
 import { Sparkles, ShieldAlert, Cpu, Layers, Bot, Activity } from 'lucide-react';
 import { Session } from '../../db/db.js';
+import { isDemoMode } from '../config.js';
 
 interface WorkflowHeaderProps {
   workflowName: string;
@@ -14,6 +15,7 @@ interface WorkflowHeaderProps {
   isActivityDrawerOpen?: boolean;
   onToggleActivityDrawer?: () => void;
   logCount?: number;
+  isDemo?: boolean;
 }
 
 export const WorkflowHeader: React.FC<WorkflowHeaderProps> = ({
@@ -28,7 +30,10 @@ export const WorkflowHeader: React.FC<WorkflowHeaderProps> = ({
   isActivityDrawerOpen,
   onToggleActivityDrawer,
   logCount,
+  isDemo,
 }) => {
+  const showDemoButton = isDemo !== undefined ? isDemo : isDemoMode();
+
   return (
     <header style={{ marginBottom: '24px' }}>
       {/* Top Branding & Status Row */}
@@ -140,30 +145,32 @@ export const WorkflowHeader: React.FC<WorkflowHeaderProps> = ({
             </button>
           )}
 
-          <button
-            onClick={onTriggerSim}
-            disabled={isSimulating}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              background: isSimulating
-                ? 'rgba(99, 102, 241, 0.4)'
-                : 'linear-gradient(135deg, #6366f1, #06b6d4)',
-              border: 'none',
-              borderRadius: '8px',
-              color: '#ffffff',
-              padding: '8px 16px',
-              fontWeight: 600,
-              fontSize: '0.85rem',
-              cursor: isSimulating ? 'not-allowed' : 'pointer',
-              boxShadow: '0 4px 12px rgba(99, 102, 241, 0.3)',
-              transition: 'all 0.2s ease',
-            }}
-          >
-            <Sparkles size={16} />
-            {isSimulating ? 'Running Multi-Agent Session Simulation...' : 'Simulate Concurrent Multi-Agent Workflows'}
-          </button>
+          {showDemoButton && (
+            <button
+              onClick={onTriggerSim}
+              disabled={isSimulating}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                background: isSimulating
+                  ? 'rgba(99, 102, 241, 0.4)'
+                  : 'linear-gradient(135deg, #6366f1, #06b6d4)',
+                border: 'none',
+                borderRadius: '8px',
+                color: '#ffffff',
+                padding: '8px 16px',
+                fontWeight: 600,
+                fontSize: '0.85rem',
+                cursor: isSimulating ? 'not-allowed' : 'pointer',
+                boxShadow: '0 4px 12px rgba(99, 102, 241, 0.3)',
+                transition: 'all 0.2s ease',
+              }}
+            >
+              <Sparkles size={16} />
+              {isSimulating ? 'Running Multi-Agent Session Simulation...' : 'Simulate Concurrent Multi-Agent Workflows'}
+            </button>
+          )}
         </div>
       </div>
 
