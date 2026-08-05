@@ -136,7 +136,7 @@ app.post('/api/mcp-direct', authenticateAgent, async (req: Request, res: Respons
     if (!name) {
       return res.status(400).json({ success: false, error: 'Tool name required' });
     }
-    const result = await handleToolCall(name, args || {}, req.agentId);
+    const result = await handleToolCall(name, args || {}, req.agentId, req.createdBy);
     res.json({ success: true, result });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });

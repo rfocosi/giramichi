@@ -1,3 +1,5 @@
+export type UserId = string | number | Record<string, any>;
+
 export interface Status {
   id: string;
   name: string;
@@ -13,6 +15,8 @@ export interface Workflow {
   statuses: Status[];
   is_active: boolean;
   created_at: string;
+  created_by?: UserId;
+  last_updated_by?: UserId;
 }
 
 export interface Session {
@@ -24,6 +28,8 @@ export interface Session {
   workflow_id: string;
   created_at: string;
   updated_at: string;
+  created_by?: UserId;
+  last_updated_by?: UserId;
 }
 
 export interface Task {
@@ -39,6 +45,8 @@ export interface Task {
   metadata?: Record<string, any>;
   created_at: string;
   updated_at: string;
+  created_by?: UserId;
+  last_updated_by?: UserId;
 }
 
 export interface ActivityLog {
@@ -46,6 +54,7 @@ export interface ActivityLog {
   session_id?: string;
   task_id?: string;
   agent_id?: string;
+  created_by?: UserId;
   action_type: 'WORKFLOW_CREATED' | 'WORKFLOW_ACTIVATED' | 'SESSION_CREATED' | 'SESSION_UPDATED' | 'TASK_CREATED' | 'TASK_MOVED' | 'TASK_UPDATED';
   details: string;
   from_status?: string;
@@ -63,14 +72,14 @@ export interface IDatabaseAdapter {
   getSessions(status?: string): Promise<Session[]>;
   getSessionById(sessionId: string): Promise<Session | null>;
   getActiveSession(): Promise<Session>;
-  createSession(name: string, description: string, agentId?: string, workflowId?: string): Promise<Session>;
-  updateSessionStatus(sessionId: string, status: Session['status'], agentId?: string): Promise<Session>;
+  createSession(name: string, description: string, agentId?: string, workflowId?: string, createdBy?: UserId): Promise<Session>;
+  updateSessionStatus(sessionId: string, status: Session['status'], agentId?: string, lastUpdatedBy?: UserId): Promise<Session>;
   
   // Workflows
   getWorkflows(): Promise<Workflow[]>;
   getActiveWorkflow(): Promise<Workflow>;
-  createWorkflow(name: string, description: string, statuses: Status[], setActive?: boolean, agentId?: string): Promise<Workflow>;
-  setActiveWorkflow(workflowId: string, agentId?: string): Promise<Workflow>;
+  createWorkflow(name: string, description: string, statuses: Status[], setActive?: boolean, agentId?: string, createdBy?: UserId): Promise<Workflow>;
+  setActiveWorkflow(workflowId: string, agentId?: string, lastUpdatedBy?: UserId): Promise<Workflow>;
   
   // Tasks
   getTasks(workflowId?: string, sessionId?: string): Promise<Task[]>;
@@ -84,15 +93,17 @@ export interface IDatabaseAdapter {
     metadata?: Record<string, any>,
     sessionId?: string,
     order?: number,
-    agentId?: string
+    agentId?: string,
+    createdBy?: UserId
   ): Promise<Task>;
   batchCreateTasks(
     tasksInput: Array<{ title: string; description: string; status_id?: string; priority?: Task['priority']; tags?: string[]; session_id?: string; order?: number }>,
     sessionId?: string,
-    agentId?: string
+    agentId?: string,
+    createdBy?: UserId
   ): Promise<Task[]>;
-  moveTask(taskId: string, newStatusId: string, reason?: string, agentId?: string): Promise<Task>;
-  updateTask(taskId: string, updates: Partial<Pick<Task, 'title' | 'description' | 'priority' | 'tags' | 'metadata' | 'order'>>, agentId?: string): Promise<Task>;
+  moveTask(taskId: string, newStatusId: string, reason?: string, agentId?: string, lastUpdatedBy?: UserId): Promise<Task>;
+  updateTask(taskId: string, updates: Partial<Pick<Task, 'title' | 'description' | 'priority' | 'tags' | 'metadata' | 'order'>>, agentId?: string, lastUpdatedBy?: UserId): Promise<Task>;
   
   // Activity Logs
   logActivity(log: Omit<ActivityLog, 'id' | 'timestamp'>): Promise<void>;
