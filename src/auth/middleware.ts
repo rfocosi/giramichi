@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
-import { getAuthConfig, verifyOAuth2Token, AuthenticatedAgent } from './auth.js';
+import { getAuthConfig, verifyOAuth2Token, AuthenticatedAgent, getAnonymousAuthContext } from './auth.js';
 
 // Extend Express Request type
 declare global {
@@ -7,6 +7,9 @@ declare global {
     interface Request {
       agentId?: string;
       agent?: AuthenticatedAgent;
+      createdBy?: string | number;
+      lastUpdatedBy?: string | number;
+      userContext?: { userId: string | number; user: string };
     }
   }
 }
@@ -23,12 +26,25 @@ export async function authenticateAgent(req: Request, res: Response, next: NextF
         const agent = await verifyOAuth2Token(token);
         req.agentId = agent.agentId;
         req.agent = agent;
+        req.createdBy = agent.createdBy ?? 0;
+        req.lastUpdatedBy = agent.lastUpdatedBy ?? 0;
+        req.userContext = { userId: agent.userId ?? 0, user: agent.user || 'anonymous' };
+        return next();
       } catch {
-        req.agentId = (req.headers['x-agent-id'] as string) || 'anonymous';
+        // Fallback to anonymous default when token verification fails in disabled mode
       }
-    } else {
-      req.agentId = (req.headers['x-agent-id'] as string) || 'anonymous';
     }
+
+    const anonAgent = getAnonymousAuthContext();
+    const customAgentId = req.headers['x-agent-id'] as string;
+    if (customAgentId) {
+      anonAgent.agentId = customAgentId;
+    }
+    req.agentId = anonAgent.agentId;
+    req.agent = anonAgent;
+    req.createdBy = 0;
+    req.lastUpdatedBy = 0;
+    req.userContext = { userId: 0, user: 'anonymous' };
     return next();
   }
 
@@ -48,6 +64,9 @@ export async function authenticateAgent(req: Request, res: Response, next: NextF
       const agent = await verifyOAuth2Token(token);
       req.agentId = agent.agentId;
       req.agent = agent;
+      req.createdBy = agent.createdBy ?? 0;
+      req.lastUpdatedBy = agent.lastUpdatedBy ?? 0;
+      req.userContext = { userId: agent.userId ?? 0, user: agent.user || 'anonymous' };
       return next();
     } catch (err: any) {
       res.status(401).json({
@@ -59,6 +78,11 @@ export async function authenticateAgent(req: Request, res: Response, next: NextF
   }
 
   // Fallback for unknown auth mode
+  const anonAgent = getAnonymousAuthContext();
   req.agentId = 'anonymous';
+  req.agent = anonAgent;
+  req.createdBy = 0;
+  req.lastUpdatedBy = 0;
+  req.userContext = { userId: 0, user: 'anonymous' };
   next();
 }

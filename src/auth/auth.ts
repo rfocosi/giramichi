@@ -44,7 +44,22 @@ export interface AuthenticatedAgent {
   sub?: string;
   username?: string;
   clientId?: string;
+  userId?: string | number;
+  user?: string;
+  createdBy?: string | number;
+  lastUpdatedBy?: string | number;
   claims: JWTPayload;
+}
+
+export function getAnonymousAuthContext(): AuthenticatedAgent {
+  return {
+    agentId: 'anonymous',
+    user: 'anonymous',
+    userId: 0,
+    createdBy: 0,
+    lastUpdatedBy: 0,
+    claims: {},
+  };
 }
 
 export async function verifyOAuth2Token(token: string): Promise<AuthenticatedAgent> {
@@ -65,14 +80,25 @@ export async function verifyOAuth2Token(token: string): Promise<AuthenticatedAge
   const clientId = (payload.client_id || payload.azp) as string | undefined;
   const sub = payload.sub as string | undefined;
 
+  let userId: string | number | undefined = sub;
+  if (sub && !isNaN(Number(sub))) {
+    userId = Number(sub);
+  }
+
   // Derive agent identifier for activity logging
   const agentId = username || clientId || sub || 'anonymous';
+  const createdBy = userId ?? username ?? clientId ?? 0;
+  const user = username || agentId;
 
   return {
     agentId,
     sub,
     username,
     clientId,
+    userId: userId ?? 0,
+    user,
+    createdBy,
+    lastUpdatedBy: createdBy,
     claims: payload,
   };
 }
