@@ -116,6 +116,7 @@ export interface ReportsData {
     avgVelocityTasksPerHour: number;
     avgCycleTimeMinutes: number;
     avgLeadTimeMinutes: number;
+    totalSessionTimeMinutes: number;
     totalPromptTokens: number;
     totalCompletionTokens: number;
     totalCachedTokens: number;
@@ -359,6 +360,57 @@ export function generateReportsData(
   const avgCycleTimeMinutes = Number((avgCycleTimeMs / (1000 * 60)).toFixed(1));
   const avgLeadTimeMinutes = Number((avgLeadTimeMs / (1000 * 60)).toFixed(1));
 
+  // Total Session Time (minutes)
+  let totalSessionDurationMs = 0;
+  if (filterSessionId && filterSessionId !== 'all') {
+    const singleSession = sessionMap.get(filterSessionId);
+    if (singleSession) {
+      const sStart = new Date(singleSession.created_at).getTime();
+      let sEnd = (singleSession.status === 'completed' || singleSession.status === 'archived')
+        ? new Date(singleSession.updated_at).getTime()
+        : now.getTime();
+      tasks.forEach((t) => {
+        const tUp = new Date(t.updated_at).getTime();
+        if (tUp > sEnd) sEnd = tUp;
+      });
+      totalSessionDurationMs = Math.max(0, sEnd - sStart);
+    } else if (tasks.length > 0) {
+      let earliest = now.getTime();
+      let latest = 0;
+      tasks.forEach((t) => {
+        const cTime = new Date(t.created_at).getTime();
+        const uTime = new Date(t.updated_at).getTime();
+        if (cTime < earliest) earliest = cTime;
+        if (uTime > latest) latest = uTime;
+      });
+      totalSessionDurationMs = Math.max(0, latest - earliest);
+    }
+  } else {
+    // All sessions
+    const relevantSessions = timeThreshold > 0
+      ? sessions.filter((s) => new Date(s.created_at).getTime() >= timeThreshold || new Date(s.updated_at).getTime() >= timeThreshold)
+      : sessions;
+
+    if (relevantSessions.length > 0) {
+      totalSessionDurationMs = relevantSessions.reduce((acc, s) => {
+        const sStart = new Date(s.created_at).getTime();
+        const sEnd = (s.status === 'completed' || s.status === 'archived') ? new Date(s.updated_at).getTime() : now.getTime();
+        return acc + Math.max(0, sEnd - sStart);
+      }, 0);
+    } else if (tasks.length > 0) {
+      let earliest = now.getTime();
+      let latest = 0;
+      tasks.forEach((t) => {
+        const cTime = new Date(t.created_at).getTime();
+        const uTime = new Date(t.updated_at).getTime();
+        if (cTime < earliest) earliest = cTime;
+        if (uTime > latest) latest = uTime;
+      });
+      totalSessionDurationMs = Math.max(0, latest - earliest);
+    }
+  }
+  const totalSessionTimeMinutes = Number((totalSessionDurationMs / (1000 * 60)).toFixed(1));
+
   // Velocity (tasks/hr)
   let earliestCreatedTime = now.getTime();
   tasks.forEach((t) => {
@@ -508,6 +560,7 @@ export function generateReportsData(
       avgVelocityTasksPerHour,
       avgCycleTimeMinutes,
       avgLeadTimeMinutes,
+      totalSessionTimeMinutes,
       totalPromptTokens,
       totalCompletionTokens,
       totalCachedTokens,

@@ -135,6 +135,8 @@ test.describe('Reports Engine Unit Tests', () => {
     expect(report.summary.completedTasks).toBe(1);
     expect(report.summary.inProgressTasks).toBe(1);
     expect(report.summary.completionRate).toBe(50);
+    expect(report.summary.avgCycleTimeMinutes).toBeGreaterThan(0);
+    expect(report.summary.totalSessionTimeMinutes).toBeGreaterThan(0);
     expect(report.summary.totalTokens).toBe(10000 + 2000 + 8000 + 1500);
     expect(report.summary.totalPromptTokens).toBe(18000);
     expect(report.summary.totalCompletionTokens).toBe(3500);
@@ -162,6 +164,7 @@ test.describe('Reports Engine Unit Tests', () => {
     expect(report.summary.completionRate).toBe(0);
     expect(report.summary.avgVelocityTasksPerHour).toBe(0);
     expect(report.summary.avgCycleTimeMinutes).toBe(0);
+    expect(report.summary.totalSessionTimeMinutes).toBe(0);
     expect(report.summary.totalTokens).toBe(0);
     expect(report.summary.totalCostUsd).toBe(0);
     expect(report.summary.roiMultiplier).toBe(0);
@@ -190,6 +193,7 @@ test.describe('Reports Engine Unit Tests', () => {
 
     expect(report.summary.totalTasks).toBe(1);
     expect(report.summary.completedTasks).toBe(1);
+    expect(report.summary.totalSessionTimeMinutes).toBeGreaterThan(0);
     expect(report.summary.totalTokens).toBe(0);
     expect(report.summary.totalCostUsd).toBe(0);
     expect(report.tasks[0].promptTokens).toBe(0);

@@ -1,5 +1,6 @@
 import pg from 'pg';
 import { IDatabaseAdapter, Workflow, Task, ActivityLog, Status, Session, EventListener, UserId } from '../types.js';
+import { parseDisplayPeriod } from '../../utils/periodParser.js';
 
 function formatUserId(val: any): string | null {
   if (val === undefined || val === null) return null;
@@ -162,10 +163,25 @@ export class PostgresAdapter implements IDatabaseAdapter {
   }
 
   // Session management
-  public async getSessions(status?: string): Promise<Session[]> {
+  public async getSessions(status?: string, since?: string | Date | null): Promise<Session[]> {
+    let cutoffIso: string | null = null;
+    if (since === undefined) {
+      const cutoff = parseDisplayPeriod();
+      cutoffIso = cutoff ? cutoff.toISOString() : null;
+    } else if (since instanceof Date) {
+      cutoffIso = since.toISOString();
+    } else if (typeof since === 'string' && since.trim().toLowerCase() !== 'all') {
+      const cutoff = parseDisplayPeriod(since);
+      cutoffIso = cutoff ? cutoff.toISOString() : null;
+    }
+
     let res: pg.QueryResult;
-    if (status) {
+    if (status && cutoffIso) {
+      res = await this.pool.query(`SELECT * FROM sessions WHERE status = $1 AND updated_at >= $2 ORDER BY updated_at DESC`, [status, cutoffIso]);
+    } else if (status) {
       res = await this.pool.query(`SELECT * FROM sessions WHERE status = $1 ORDER BY updated_at DESC`, [status]);
+    } else if (cutoffIso) {
+      res = await this.pool.query(`SELECT * FROM sessions WHERE updated_at >= $1 ORDER BY updated_at DESC`, [cutoffIso]);
     } else {
       res = await this.pool.query(`SELECT * FROM sessions ORDER BY updated_at DESC`);
     }

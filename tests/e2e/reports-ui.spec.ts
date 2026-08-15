@@ -17,6 +17,7 @@ test.describe('Giramichi Reports & Analytics UI E2E Tests', () => {
     // Verify Reports page components render
     await expect(page.locator('text=Agent Velocity')).toBeVisible();
     await expect(page.locator('text=Mean Cycle Time')).toBeVisible();
+    await expect(page.locator('text=Total Session Time')).toBeVisible();
     await expect(page.locator('text=Total Tokens')).toBeVisible();
     await expect(page.locator('text=Incurred LLM Cost')).toBeVisible();
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Zap, Clock, Cpu, DollarSign, CheckCircle2, RotateCcw } from 'lucide-react';
+import { Zap, Clock, Timer, Cpu, DollarSign, CheckCircle2, RotateCcw } from 'lucide-react';
 import { ReportsData } from '../../server/reportsEngine.js';
 
 interface ExecutiveKPIRibbonProps {
@@ -25,7 +25,7 @@ export const ExecutiveKPIRibbon: React.FC<ExecutiveKPIRibbonProps> = ({ summary 
     <div
       style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
         gap: '16px',
         marginBottom: '24px',
       }}
@@ -113,7 +113,48 @@ export const ExecutiveKPIRibbon: React.FC<ExecutiveKPIRibbonProps> = ({ summary 
         </div>
       </div>
 
-      {/* 3. Total Tokens */}
+      {/* 3. Total Session Time */}
+      <div
+        className="glass-panel"
+        style={{
+          padding: '20px',
+          position: 'relative',
+          overflow: 'hidden',
+          borderTop: '3px solid var(--accent-emerald)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+          <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Total Session Time
+          </span>
+          <div
+            style={{
+              padding: '6px',
+              borderRadius: '8px',
+              background: 'rgba(16, 185, 129, 0.15)',
+              color: 'var(--accent-emerald)',
+            }}
+          >
+            <Timer size={18} />
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '6px' }}>
+          <span style={{ fontSize: '2rem', fontWeight: 800, color: '#ffffff', fontFamily: 'var(--font-display)', letterSpacing: '-0.02em' }}>
+            {formatDuration(summary.totalSessionTimeMinutes)}
+          </span>
+          <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 500 }}>duration</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-dim)' }}>
+          <span>Cumulative span</span>
+          <span style={{ color: 'var(--accent-emerald)', fontWeight: 600 }}>
+            {summary.totalSessionTimeMinutes >= 60
+              ? `${(summary.totalSessionTimeMinutes / 60).toFixed(1)} hrs`
+              : `${summary.totalSessionTimeMinutes} mins`}
+          </span>
+        </div>
+      </div>
+
+      {/* 4. Total Tokens */}
       <div
         className="glass-panel"
         style={{

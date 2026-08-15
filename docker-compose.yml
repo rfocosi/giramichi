@@ -21,6 +21,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3001
+      - GIRAMICHI_SESSION_HISTORY_DISPLAY_PERIOD=${GIRAMICHI_SESSION_HISTORY_DISPLAY_PERIOD:-3D}
     ports:
       - "3001:3001"
     volumes:
