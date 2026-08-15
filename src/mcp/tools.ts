@@ -342,14 +342,15 @@ export async function handleToolCall(name: string, args: any, agentId?: string, 
       }
 
       case 'giramichi_close_session': {
-        const session = await db.updateSessionStatus(args.session_id, args.status, agentId, createdBy);
+        const targetStatus = args.status || 'completed';
+        const session = await db.updateSessionStatus(args.session_id, targetStatus, agentId, createdBy);
         return {
           content: [
             {
               type: 'text',
               text: JSON.stringify({
                 success: true,
-                message: `Session [${session.id}] status updated to ${args.status}.`,
+                message: `Session [${session.id}] status updated to ${targetStatus}.`,
                 instruction: MCP_INSTRUCTION_HINT,
                 session,
               }, null, 2),

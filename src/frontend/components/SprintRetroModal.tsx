@@ -34,6 +34,7 @@ export const SprintRetroModal: React.FC<SprintRetroModalProps> = ({
 - **Completed Deliverables:** ${reports.summary.completedTasks} / ${reports.summary.totalTasks} (${reports.summary.completionRate}% completion)
 - **Agent Velocity:** ${reports.summary.avgVelocityTasksPerHour} tasks/hour
 - **Mean Cycle Time:** ${reports.summary.avgCycleTimeMinutes} minutes (from In Progress ➔ Done)
+- **Total Session Time:** ${reports.summary.totalSessionTimeMinutes} minutes (${(reports.summary.totalSessionTimeMinutes / 60).toFixed(1)} hrs)
 - **Mean Lead Time:** ${reports.summary.avgLeadTimeMinutes} minutes
 - **Rework / Backward Transitions:** ${reports.summary.reworkCount} (${reports.summary.reworkRate}%)
 
