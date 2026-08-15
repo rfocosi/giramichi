@@ -1,5 +1,6 @@
 import sql from 'mssql';
 import { IDatabaseAdapter, Workflow, Task, ActivityLog, Status, Session, EventListener, UserId } from '../types.js';
+import { parseDisplayPeriod } from '../../utils/periodParser.js';
 
 function formatUserId(val: any): string | null {
   if (val === undefined || val === null) return null;
@@ -177,12 +178,31 @@ export class MssqlAdapter implements IDatabaseAdapter {
   }
 
   // Sessions
-  public async getSessions(status?: string): Promise<Session[]> {
+  public async getSessions(status?: string, since?: string | Date | null): Promise<Session[]> {
+    let cutoffIso: string | null = null;
+    if (since === undefined) {
+      const cutoff = parseDisplayPeriod();
+      cutoffIso = cutoff ? cutoff.toISOString() : null;
+    } else if (since instanceof Date) {
+      cutoffIso = since.toISOString();
+    } else if (typeof since === 'string' && since.trim().toLowerCase() !== 'all') {
+      const cutoff = parseDisplayPeriod(since);
+      cutoffIso = cutoff ? cutoff.toISOString() : null;
+    }
+
     let req = this.pool.request();
     let query = `SELECT * FROM sessions`;
+    const conditions: string[] = [];
     if (status) {
       req = req.input('status', sql.NVarChar, status);
-      query += ` WHERE status = @status`;
+      conditions.push(`status = @status`);
+    }
+    if (cutoffIso) {
+      req = req.input('since', sql.NVarChar, cutoffIso);
+      conditions.push(`updated_at >= @since`);
+    }
+    if (conditions.length > 0) {
+      query += ` WHERE ` + conditions.join(' AND ');
     }
     query += ` ORDER BY updated_at DESC`;
     const res = await req.query(query);

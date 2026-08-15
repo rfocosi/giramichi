@@ -1,5 +1,6 @@
 import mysql from 'mysql2/promise';
 import { IDatabaseAdapter, Workflow, Task, ActivityLog, Status, Session, EventListener, UserId } from '../types.js';
+import { parseDisplayPeriod } from '../../utils/periodParser.js';
 
 function formatUserId(val: any): string | null {
   if (val === undefined || val === null) return null;
@@ -167,10 +168,27 @@ export class MysqlAdapter implements IDatabaseAdapter {
   }
 
   // Session management
-  public async getSessions(status?: string): Promise<Session[]> {
+  public async getSessions(status?: string, since?: string | Date | null): Promise<Session[]> {
+    let cutoffIso: string | null = null;
+    if (since === undefined) {
+      const cutoff = parseDisplayPeriod();
+      cutoffIso = cutoff ? cutoff.toISOString() : null;
+    } else if (since instanceof Date) {
+      cutoffIso = since.toISOString();
+    } else if (typeof since === 'string' && since.trim().toLowerCase() !== 'all') {
+      const cutoff = parseDisplayPeriod(since);
+      cutoffIso = cutoff ? cutoff.toISOString() : null;
+    }
+
     let rows: any[];
-    if (status) {
+    if (status && cutoffIso) {
+      const [res]: any = await this.pool.query(`SELECT * FROM sessions WHERE status = ? AND updated_at >= ? ORDER BY updated_at DESC`, [status, cutoffIso]);
+      rows = res;
+    } else if (status) {
       const [res]: any = await this.pool.query(`SELECT * FROM sessions WHERE status = ? ORDER BY updated_at DESC`, [status]);
+      rows = res;
+    } else if (cutoffIso) {
+      const [res]: any = await this.pool.query(`SELECT * FROM sessions WHERE updated_at >= ? ORDER BY updated_at DESC`, [cutoffIso]);
       rows = res;
     } else {
       const [res]: any = await this.pool.query(`SELECT * FROM sessions ORDER BY updated_at DESC`);

@@ -69,7 +69,7 @@ export interface IDatabaseAdapter {
   init(): Promise<void>;
   
   // Sessions
-  getSessions(status?: string): Promise<Session[]>;
+  getSessions(status?: string, since?: string | Date | null): Promise<Session[]>;
   getSessionById(sessionId: string): Promise<Session | null>;
   getActiveSession(): Promise<Session>;
   createSession(name: string, description: string, agentId?: string, workflowId?: string, createdBy?: UserId): Promise<Session>;
