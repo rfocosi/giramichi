@@ -97,7 +97,7 @@ export interface IDatabaseAdapter {
     createdBy?: UserId
   ): Promise<Task>;
   batchCreateTasks(
-    tasksInput: Array<{ title: string; description: string; status_id?: string; priority?: Task['priority']; tags?: string[]; session_id?: string; order?: number }>,
+    tasksInput: Array<{ title: string; description: string; status_id?: string; priority?: Task['priority']; tags?: string[]; metadata?: Record<string, any>; session_id?: string; order?: number }>,
     sessionId?: string,
     agentId?: string,
     createdBy?: UserId

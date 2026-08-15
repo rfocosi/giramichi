@@ -1,4 +1,5 @@
 import { db } from '../db/index.js';
+import { autoInferMetrics, MCP_INSTRUCTION_HINT } from '../server/telemetryAutoIngestion.js';
 
 export const toolDefinitions = [
   {
@@ -99,6 +100,18 @@ export const toolDefinitions = [
         order: { type: 'number', description: 'Execution sequence order (e.g. 1.0, 1.1, 1.5, 2.0). Tasks execute in ascending order.' },
         tags: { type: 'array', items: { type: 'string' }, description: 'Tags/labels for the task (e.g. ["frontend", "api", "auth"])' },
         session_id: { type: 'string', description: 'Optional session ID for multi-agent grouping (defaults to active session if omitted)' },
+        metrics: {
+          type: 'object',
+          description: 'Optional LLM execution telemetry (model, prompt_tokens, completion_tokens, cached_tokens, duration_ms, cost_usd)',
+          properties: {
+            model: { type: 'string' },
+            prompt_tokens: { type: 'number' },
+            completion_tokens: { type: 'number' },
+            cached_tokens: { type: 'number' },
+            duration_ms: { type: 'number' },
+            cost_usd: { type: 'number' },
+          },
+        },
       },
       required: ['title', 'description'],
     },
@@ -122,6 +135,17 @@ export const toolDefinitions = [
               order: { type: 'number', description: 'Decimal order position (e.g. 1.0, 1.5, 2.0)' },
               tags: { type: 'array', items: { type: 'string' } },
               session_id: { type: 'string' },
+              metrics: {
+                type: 'object',
+                properties: {
+                  model: { type: 'string' },
+                  prompt_tokens: { type: 'number' },
+                  completion_tokens: { type: 'number' },
+                  cached_tokens: { type: 'number' },
+                  duration_ms: { type: 'number' },
+                  cost_usd: { type: 'number' },
+                },
+              },
             },
             required: ['title', 'description'],
           },
@@ -139,13 +163,25 @@ export const toolDefinitions = [
         task_id: { type: 'string', description: 'Task ID (e.g., "GIRA-101")' },
         new_status_id: { type: 'string', description: 'Target status column ID (e.g., "in_progress", "done")' },
         reason: { type: 'string', description: 'Detailed rationale for why the AI moved this card' },
+        metrics: {
+          type: 'object',
+          description: 'Optional LLM execution telemetry for this transition',
+          properties: {
+            model: { type: 'string' },
+            prompt_tokens: { type: 'number' },
+            completion_tokens: { type: 'number' },
+            cached_tokens: { type: 'number' },
+            duration_ms: { type: 'number' },
+            cost_usd: { type: 'number' },
+          },
+        },
       },
       required: ['task_id', 'new_status_id'],
     },
   },
   {
     name: 'giramichi_update_task',
-    description: 'Updates task title, description, priority, order position, or tags.',
+    description: 'Updates task title, description, priority, order position, tags, or execution metrics.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -155,6 +191,17 @@ export const toolDefinitions = [
         priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'] },
         order: { type: 'number', description: 'New execution sequence order (e.g. 1.5 to insert between 1.0 and 2.0)' },
         tags: { type: 'array', items: { type: 'string' } },
+        metrics: {
+          type: 'object',
+          properties: {
+            model: { type: 'string' },
+            prompt_tokens: { type: 'number' },
+            completion_tokens: { type: 'number' },
+            cached_tokens: { type: 'number' },
+            duration_ms: { type: 'number' },
+            cost_usd: { type: 'number' },
+          },
+        },
       },
       required: ['task_id'],
     },
@@ -245,7 +292,12 @@ export async function handleToolCall(name: string, args: any, agentId?: string, 
           content: [
             {
               type: 'text',
-              text: JSON.stringify({ success: true, message: `Session "${session.name}" created [ID: ${session.id}].`, session }, null, 2),
+              text: JSON.stringify({
+                success: true,
+                message: `Session "${session.name}" created [ID: ${session.id}].`,
+                instruction: MCP_INSTRUCTION_HINT,
+                session,
+              }, null, 2),
             },
           ],
         };
@@ -257,7 +309,7 @@ export async function handleToolCall(name: string, args: any, agentId?: string, 
           content: [
             {
               type: 'text',
-              text: JSON.stringify({ success: true, count: sessions.length, sessions }, null, 2),
+              text: JSON.stringify({ success: true, count: sessions.length, instruction: MCP_INSTRUCTION_HINT, sessions }, null, 2),
             },
           ],
         };
@@ -275,7 +327,15 @@ export async function handleToolCall(name: string, args: any, agentId?: string, 
           content: [
             {
               type: 'text',
-              text: JSON.stringify({ success: true, session, total_tasks: tasks.length, next_task_to_implement: nextTask, tasks, recent_logs: logs }, null, 2),
+              text: JSON.stringify({
+                success: true,
+                session,
+                instruction: MCP_INSTRUCTION_HINT,
+                total_tasks: tasks.length,
+                next_task_to_implement: nextTask,
+                tasks,
+                recent_logs: logs,
+              }, null, 2),
             },
           ],
         };
@@ -287,7 +347,12 @@ export async function handleToolCall(name: string, args: any, agentId?: string, 
           content: [
             {
               type: 'text',
-              text: JSON.stringify({ success: true, message: `Session [${session.id}] status updated to ${args.status}.`, session }, null, 2),
+              text: JSON.stringify({
+                success: true,
+                message: `Session [${session.id}] status updated to ${args.status}.`,
+                instruction: MCP_INSTRUCTION_HINT,
+                session,
+              }, null, 2),
             },
           ],
         };
@@ -299,7 +364,12 @@ export async function handleToolCall(name: string, args: any, agentId?: string, 
           content: [
             {
               type: 'text',
-              text: JSON.stringify({ success: true, message: `Workflow "${wf.name}" created and set as active.`, workflow: wf }, null, 2),
+              text: JSON.stringify({
+                success: true,
+                message: `Workflow "${wf.name}" created and set as active.`,
+                instruction: MCP_INSTRUCTION_HINT,
+                workflow: wf,
+              }, null, 2),
             },
           ],
         };
@@ -311,7 +381,12 @@ export async function handleToolCall(name: string, args: any, agentId?: string, 
           content: [
             {
               type: 'text',
-              text: JSON.stringify({ success: true, message: `Active workflow switched to "${wf.name}".`, workflow: wf }, null, 2),
+              text: JSON.stringify({
+                success: true,
+                message: `Active workflow switched to "${wf.name}".`,
+                instruction: MCP_INSTRUCTION_HINT,
+                workflow: wf,
+              }, null, 2),
             },
           ],
         };
@@ -319,7 +394,24 @@ export async function handleToolCall(name: string, args: any, agentId?: string, 
 
       case 'giramichi_create_task': {
         const { id: targetSessionId, autoCreated } = await resolveOrCreateSession(args.session_id, agentId);
-        const task = await db.createTask(args.title, args.description, args.status_id, args.priority, args.tags, {}, targetSessionId, args.order, agentId, createdBy);
+        const effectiveAgent = args.agent_id || agentId || 'AI-Agent';
+        const metrics = autoInferMetrics(
+          { title: args.title, description: args.description, agentId: effectiveAgent },
+          args.metrics
+        );
+        const metadata = { ...(args.metadata || {}), metrics, agent_id: effectiveAgent };
+        const task = await db.createTask(
+          args.title,
+          args.description,
+          args.status_id,
+          args.priority,
+          args.tags,
+          metadata,
+          targetSessionId,
+          args.order,
+          effectiveAgent,
+          createdBy
+        );
         return {
           content: [
             {
@@ -327,6 +419,7 @@ export async function handleToolCall(name: string, args: any, agentId?: string, 
               text: JSON.stringify({
                 success: true,
                 message: `Task [${task.id}] created in session [${task.session_id}] with order [${task.order}] under status [${task.status_id}].`,
+                instruction: MCP_INSTRUCTION_HINT,
                 auto_created_session: autoCreated,
                 task,
               }, null, 2),
@@ -337,42 +430,129 @@ export async function handleToolCall(name: string, args: any, agentId?: string, 
 
       case 'giramichi_batch_create_tasks': {
         const { id: targetSessionId, autoCreated } = await resolveOrCreateSession(args.session_id, agentId);
-        const created = await db.batchCreateTasks(args.tasks, targetSessionId, agentId, createdBy);
+        const effectiveAgent = agentId || 'AI-Agent';
+        const enrichedTasks = (args.tasks || []).map((t: any) => {
+          const taskAgent = t.agent_id || effectiveAgent;
+          const metrics = autoInferMetrics(
+            { title: t.title, description: t.description, agentId: taskAgent },
+            t.metrics || args.metrics
+          );
+          return {
+            ...t,
+            metadata: { ...(t.metadata || {}), metrics, agent_id: taskAgent },
+          };
+        });
+        const created = await db.batchCreateTasks(enrichedTasks, targetSessionId, effectiveAgent, createdBy);
         return {
           content: [
             {
               type: 'text',
-              text: JSON.stringify({ success: true, count: created.length, auto_created_session: autoCreated, target_session_id: targetSessionId, tasks: created }, null, 2),
+              text: JSON.stringify({
+                success: true,
+                count: created.length,
+                instruction: MCP_INSTRUCTION_HINT,
+                auto_created_session: autoCreated,
+                target_session_id: targetSessionId,
+                tasks: created,
+              }, null, 2),
             },
           ],
         };
       }
 
       case 'giramichi_move_task': {
-        const task = await db.moveTask(args.task_id, args.new_status_id, args.reason, agentId, createdBy);
+        const existingTask = await db.getTaskById(args.task_id);
+        const effectiveAgent = agentId || existingTask?.metadata?.agent_id || 'AI-Agent';
+        const moveMetrics = autoInferMetrics(
+          {
+            title: existingTask?.title,
+            description: existingTask?.description,
+            reason: args.reason,
+            agentId: effectiveAgent,
+          },
+          args.metrics
+        );
+
+        const currentMetrics = existingTask?.metadata?.metrics || {
+          prompt_tokens: 0,
+          completion_tokens: 0,
+          cached_tokens: 0,
+          duration_ms: 0,
+          cost_usd: 0,
+        };
+
+        const accumulatedMetrics = {
+          model: moveMetrics.model,
+          prompt_tokens: (currentMetrics.prompt_tokens || 0) + moveMetrics.prompt_tokens,
+          completion_tokens: (currentMetrics.completion_tokens || 0) + moveMetrics.completion_tokens,
+          cached_tokens: (currentMetrics.cached_tokens || 0) + moveMetrics.cached_tokens,
+          duration_ms: (currentMetrics.duration_ms || 0) + moveMetrics.duration_ms,
+          cost_usd: Number(((currentMetrics.cost_usd || 0) + moveMetrics.cost_usd).toFixed(6)),
+        };
+
+        if (existingTask) {
+          await db.updateTask(
+            args.task_id,
+            {
+              metadata: { ...(existingTask.metadata || {}), metrics: accumulatedMetrics, agent_id: effectiveAgent },
+            },
+            effectiveAgent,
+            createdBy
+          );
+        }
+
+        const task = await db.moveTask(args.task_id, args.new_status_id, args.reason, effectiveAgent, createdBy);
         return {
           content: [
             {
               type: 'text',
-              text: JSON.stringify({ success: true, message: `Task [${task.id}] moved to [${task.status_id}].`, task }, null, 2),
+              text: JSON.stringify({
+                success: true,
+                message: `Task [${task.id}] moved to [${task.status_id}].`,
+                instruction: MCP_INSTRUCTION_HINT,
+                task,
+              }, null, 2),
             },
           ],
         };
       }
 
       case 'giramichi_update_task': {
-        const task = await db.updateTask(args.task_id, {
-          title: args.title,
-          description: args.description,
-          priority: args.priority,
-          order: args.order,
-          tags: args.tags,
-        }, agentId, createdBy);
+        const existingTask = await db.getTaskById(args.task_id);
+        const effectiveAgent = agentId || existingTask?.metadata?.agent_id || 'AI-Agent';
+        let metadata = existingTask?.metadata || {};
+
+        if (args.metrics) {
+          const updatedMetrics = autoInferMetrics(
+            { title: args.title || existingTask?.title, description: args.description || existingTask?.description, agentId: effectiveAgent },
+            args.metrics
+          );
+          metadata = { ...metadata, metrics: updatedMetrics, agent_id: effectiveAgent };
+        }
+
+        const task = await db.updateTask(
+          args.task_id,
+          {
+            title: args.title,
+            description: args.description,
+            priority: args.priority,
+            order: args.order,
+            tags: args.tags,
+            metadata,
+          },
+          effectiveAgent,
+          createdBy
+        );
         return {
           content: [
             {
               type: 'text',
-              text: JSON.stringify({ success: true, message: `Task [${task.id}] updated (order: ${task.order}).`, task }, null, 2),
+              text: JSON.stringify({
+                success: true,
+                message: `Task [${task.id}] updated (order: ${task.order}).`,
+                instruction: MCP_INSTRUCTION_HINT,
+                task,
+              }, null, 2),
             },
           ],
         };
@@ -389,7 +569,17 @@ export async function handleToolCall(name: string, args: any, agentId?: string, 
           content: [
             {
               type: 'text',
-              text: JSON.stringify({ workflow, active_session_id: targetSessionId, auto_created_session: autoCreated, sessions, total_tasks: tasks.length, next_task_to_implement: nextTask, tasks, recent_logs: logs }, null, 2),
+              text: JSON.stringify({
+                workflow,
+                active_session_id: targetSessionId,
+                auto_created_session: autoCreated,
+                instruction: MCP_INSTRUCTION_HINT,
+                sessions,
+                total_tasks: tasks.length,
+                next_task_to_implement: nextTask,
+                tasks,
+                recent_logs: logs,
+              }, null, 2),
             },
           ],
         };

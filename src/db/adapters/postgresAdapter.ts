@@ -110,7 +110,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
         details TEXT NOT NULL,
         from_status VARCHAR(64),
         to_status VARCHAR(64),
-        reason VARCHAR(64),
+        reason TEXT,
         timestamp VARCHAR(64) NOT NULL
       );
     `);
@@ -119,6 +119,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
     try { await this.pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS "order" DOUBLE PRECISION NOT NULL DEFAULT 1.0;`); } catch (_) {}
     try { await this.pool.query(`ALTER TABLE activity_logs ADD COLUMN IF NOT EXISTS session_id VARCHAR(64);`); } catch (_) {}
     try { await this.pool.query(`ALTER TABLE activity_logs ADD COLUMN IF NOT EXISTS agent_id VARCHAR(128);`); } catch (_) {}
+    try { await this.pool.query(`ALTER TABLE activity_logs ALTER COLUMN reason TYPE TEXT;`); } catch (_) {}
 
     try { await this.pool.query(`ALTER TABLE workflows ADD COLUMN IF NOT EXISTS created_by TEXT;`); } catch (_) {}
     try { await this.pool.query(`ALTER TABLE workflows ADD COLUMN IF NOT EXISTS last_updated_by TEXT;`); } catch (_) {}
@@ -483,7 +484,7 @@ export class PostgresAdapter implements IDatabaseAdapter {
   }
 
   public async batchCreateTasks(
-    tasksInput: Array<{ title: string; description: string; status_id?: string; priority?: Task['priority']; tags?: string[]; session_id?: string; order?: number }>,
+    tasksInput: Array<{ title: string; description: string; status_id?: string; priority?: Task['priority']; tags?: string[]; metadata?: Record<string, any>; session_id?: string; order?: number }>,
     sessionId?: string,
     agentId?: string,
     createdBy?: UserId
@@ -493,7 +494,8 @@ export class PostgresAdapter implements IDatabaseAdapter {
       const t = tasksInput[i];
       const targetSessId = t.session_id || sessionId;
       const calcOrder = t.order !== undefined ? t.order : await this.getNextTaskOrder(targetSessId || '');
-      const created = await this.createTask(t.title, t.description, t.status_id, t.priority || 'medium', t.tags || [], {}, targetSessId, calcOrder, agentId, createdBy);
+      const meta = t.metadata || ((t as any).metrics ? { metrics: (t as any).metrics } : {});
+      const created = await this.createTask(t.title, t.description, t.status_id, t.priority || 'medium', t.tags || [], meta, targetSessId, calcOrder, agentId, createdBy);
       createdTasks.push(created);
     }
     return createdTasks;

@@ -20,12 +20,14 @@ export const fetchConfig = async (): Promise<AppConfig> => {
   // Check build-time environment variables (e.g. Vite dev or build)
   const metaEnv = (import.meta as any).env;
   if (metaEnv) {
-    if (metaEnv.VITE_GIRAMICHI_API_URL) {
+    if (metaEnv.GIRAMICHI_API_URL) {
+      appConfig.apiUrl = metaEnv.GIRAMICHI_API_URL;
+    } else if (metaEnv.VITE_GIRAMICHI_API_URL) {
       appConfig.apiUrl = metaEnv.VITE_GIRAMICHI_API_URL;
     } else if (metaEnv.VITE_API_URL) {
       appConfig.apiUrl = metaEnv.VITE_API_URL;
     }
-    if (metaEnv.VITE_DEMO === 'true' || metaEnv.VITE_DEMO === '1') {
+    if (metaEnv.VITE_DEMO === 'true' || metaEnv.VITE_DEMO === '1' || metaEnv.DEMO === 'true') {
       appConfig.isDemo = true;
     }
   }
