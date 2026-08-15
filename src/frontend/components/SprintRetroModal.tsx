@@ -46,8 +46,6 @@ export const SprintRetroModal: React.FC<SprintRetroModalProps> = ({
   - *Cached Context Read:* ${(reports.summary.totalCachedTokens / 1_000_000).toFixed(3)}M tokens
 - **Incurred API Cost:** $${reports.summary.totalCostUsd.toFixed(4)} USD
 - **Average Cost per Completed Task:** $${reports.summary.avgCostPerCompletedTaskUsd.toFixed(4)} USD
-- **Estimated Human Engineering Hours Saved:** ~${reports.summary.estimatedHumanHoursSaved} hours (~$${reports.summary.estimatedHumanValueUsd.toLocaleString()} value)
-- **Financial ROI Multiplier:** ${reports.summary.roiMultiplier}x
 
 ---
 

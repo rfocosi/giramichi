@@ -19,7 +19,6 @@ test.describe('Giramichi Reports & Analytics UI E2E Tests', () => {
     await expect(page.locator('text=Mean Cycle Time')).toBeVisible();
     await expect(page.locator('text=Total Tokens')).toBeVisible();
     await expect(page.locator('text=Incurred LLM Cost')).toBeVisible();
-    await expect(page.locator('text=Engineering ROI')).toBeVisible();
 
     // Switch back to Kanban Board
     const boardTab = page.locator('button:has-text("Kanban Board")');
