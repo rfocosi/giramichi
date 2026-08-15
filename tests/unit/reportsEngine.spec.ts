@@ -169,4 +169,32 @@ test.describe('Reports Engine Unit Tests', () => {
     expect(Array.isArray(report.agentBreakdown)).toBe(true);
     expect(Array.isArray(report.tasks)).toBe(true);
   });
+
+  test('4. legacy tasks without telemetry show 0 tokens and $0.00 cost', () => {
+    const legacyTask: Task = {
+      id: 'LEGACY-1',
+      session_id: 'sess-old',
+      workflow_id: 'wf-default',
+      title: 'Old Task Without Telemetry',
+      description: 'Created before reports feature was added',
+      status_id: 'done',
+      priority: 'medium',
+      order: 1.0,
+      tags: ['legacy'],
+      metadata: {},
+      created_at: new Date(Date.now() - 3600000).toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    const report = generateReportsData([legacyTask], [], null, [], undefined, 'all');
+
+    expect(report.summary.totalTasks).toBe(1);
+    expect(report.summary.completedTasks).toBe(1);
+    expect(report.summary.totalTokens).toBe(0);
+    expect(report.summary.totalCostUsd).toBe(0);
+    expect(report.tasks[0].promptTokens).toBe(0);
+    expect(report.tasks[0].completionTokens).toBe(0);
+    expect(report.tasks[0].costUsd).toBe(0);
+    expect(report.tasks[0].model).toBe('unspecified');
+  });
 });

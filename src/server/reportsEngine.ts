@@ -219,25 +219,21 @@ export function generateReportsData(
     const taskLogs = taskLogsMap.get(task.id) || [];
     const taskSession = sessionMap.get(task.session_id);
     const agentId = task.metadata?.agent_id || taskLogs.find((l) => l.agent_id)?.agent_id || taskSession?.agent_id || 'AI-Agent';
-    const model = task.metadata?.metrics?.model || task.metadata?.model || 'claude-3-5-sonnet';
+    const model = task.metadata?.metrics?.model || task.metadata?.model || 'unspecified';
 
-    // Token metrics
-    let promptTokens = task.metadata?.metrics?.prompt_tokens ?? task.metadata?.prompt_tokens ?? 0;
-    let completionTokens = task.metadata?.metrics?.completion_tokens ?? task.metadata?.completion_tokens ?? 0;
-    let cachedTokens = task.metadata?.metrics?.cached_tokens ?? task.metadata?.cached_tokens ?? 0;
-    let durationMs = task.metadata?.metrics?.duration_ms ?? task.metadata?.duration_ms ?? 0;
-    let explicitCost = task.metadata?.metrics?.cost_usd ?? task.metadata?.cost_usd;
-
-    // If task has no telemetry yet, derive deterministic realistic baseline based on description/tags/complexity
-    if (!promptTokens && !completionTokens) {
-      const lengthFactor = Math.max(1, Math.ceil((task.description.length + task.title.length) / 50));
-      promptTokens = 4200 + lengthFactor * 1800;
-      completionTokens = 350 + lengthFactor * 220;
-      cachedTokens = 1200;
-    }
+    // Token metrics: strictly explicit telemetry from agent metadata (0 for legacy tasks)
+    const promptTokens = task.metadata?.metrics?.prompt_tokens ?? task.metadata?.prompt_tokens ?? 0;
+    const completionTokens = task.metadata?.metrics?.completion_tokens ?? task.metadata?.completion_tokens ?? 0;
+    const cachedTokens = task.metadata?.metrics?.cached_tokens ?? task.metadata?.cached_tokens ?? 0;
+    const durationMs = task.metadata?.metrics?.duration_ms ?? task.metadata?.duration_ms ?? 0;
+    const explicitCost = task.metadata?.metrics?.cost_usd ?? task.metadata?.cost_usd;
 
     const totalTokens = promptTokens + completionTokens;
-    const costUsd = explicitCost !== undefined ? explicitCost : calculateCost(model, promptTokens, completionTokens, cachedTokens);
+    const costUsd = explicitCost !== undefined
+      ? explicitCost
+      : (totalTokens > 0 || cachedTokens > 0)
+        ? calculateCost(model, promptTokens, completionTokens, cachedTokens)
+        : 0;
 
     // Compute Lead Time & Cycle Time
     const createdTime = new Date(task.created_at).getTime();
@@ -415,7 +411,7 @@ export function generateReportsData(
   // Model Breakdown
   const modelMap = new Map<string, { totalTasks: number; totalTokens: number; costUsd: number }>();
   taskMetricsList.forEach((t) => {
-    const m = t.model || 'claude-3-5-sonnet';
+    const m = t.model || 'unspecified';
     if (!modelMap.has(m)) {
       modelMap.set(m, { totalTasks: 0, totalTokens: 0, costUsd: 0 });
     }
