@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-const API_BASE_URL = process.env.API_BASE_URL || 'http://192.168.50.10:3001';
+const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:3001';
 
 test.describe('Giramichi API Endpoints Tests', () => {
   test.describe('1. Board, Sessions & Workflows Endpoints', () => {

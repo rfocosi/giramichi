@@ -41,6 +41,15 @@ test.describe('Reports & Analytics API Endpoint Suite', () => {
     expect(body.reports.timeframe).toBe('24h');
   });
 
+  test('GET /api/reports?timeframe=7d - should return filtered metrics for 7 days', async ({ request }) => {
+    const response = await request.get(`${API_BASE_URL}/api/reports?timeframe=7d`);
+    expect(response.status()).toBe(200);
+
+    const body = await response.json();
+    expect(body.success).toBe(true);
+    expect(body.reports.timeframe).toBe('7d');
+  });
+
   test('GET /api/reports?session_id=sess-default - should filter metrics by session', async ({ request }) => {
     const response = await request.get(`${API_BASE_URL}/api/reports?session_id=sess-default`);
     expect(response.status()).toBe(200);
@@ -50,6 +59,21 @@ test.describe('Reports & Analytics API Endpoint Suite', () => {
     // All returned tasks should belong to sess-default
     for (const t of body.reports.tasks) {
       expect(t.sessionId).toBe('sess-default');
+    }
+  });
+
+  test('GET /api/reports - tasks without metadata should return 0 tokens and $0.00 cost', async ({ request }) => {
+    const response = await request.get(`${API_BASE_URL}/api/reports`);
+    expect(response.status()).toBe(200);
+
+    const body = await response.json();
+    expect(body.success).toBe(true);
+    const tasks = body.reports.tasks;
+    const legacyTask = tasks.find((t: any) => !t.metadata?.metrics);
+    if (legacyTask) {
+      expect(legacyTask.promptTokens).toBe(0);
+      expect(legacyTask.completionTokens).toBe(0);
+      expect(legacyTask.costUsd).toBe(0);
     }
   });
 });

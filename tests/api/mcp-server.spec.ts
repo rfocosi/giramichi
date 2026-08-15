@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-const MCP_BASE_URL = process.env.MCP_SERVER_URL || process.env.API_BASE_URL || 'http://192.168.50.10:3001';
+const MCP_BASE_URL = process.env.MCP_SERVER_URL || process.env.API_BASE_URL || 'http://localhost:3001';
 
 test.describe('Giramichi MCP Server HTTP Endpoints Spec', () => {
   let mcpSessionId: string = '';
@@ -163,6 +163,8 @@ test.describe('Giramichi MCP Server HTTP Endpoints Spec', () => {
       const text = await response.text();
       expect(text).toContain('jsonrpc');
       expect(text).toContain('Playwright Test Session');
+      expect(text).toContain('instruction');
+      expect(text).toContain('AGENTS.md');
     });
 
     test('POST /mcp - tools/call - should handle unknown tool gracefully', async ({ request }) => {
