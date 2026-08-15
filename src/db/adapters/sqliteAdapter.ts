@@ -504,7 +504,7 @@ export class SqliteAdapter implements IDatabaseAdapter {
   }
 
   public async batchCreateTasks(
-    tasksInput: Array<{ title: string; description: string; status_id?: string; priority?: Task['priority']; tags?: string[]; session_id?: string; order?: number }>,
+    tasksInput: Array<{ title: string; description: string; status_id?: string; priority?: Task['priority']; tags?: string[]; metadata?: Record<string, any>; session_id?: string; order?: number }>,
     sessionId?: string,
     agentId?: string,
     createdBy?: UserId
@@ -514,7 +514,8 @@ export class SqliteAdapter implements IDatabaseAdapter {
       const t = tasksInput[i];
       const targetSessId = t.session_id || sessionId;
       const calcOrder = t.order !== undefined ? t.order : (await this.getSessionById(targetSessId || '')) ? this.getNextTaskOrder(targetSessId!) : i + 1.0;
-      const created = await this.createTask(t.title, t.description, t.status_id, t.priority || 'medium', t.tags || [], {}, targetSessId, calcOrder, agentId, createdBy);
+      const meta = t.metadata || ((t as any).metrics ? { metrics: (t as any).metrics } : {});
+      const created = await this.createTask(t.title, t.description, t.status_id, t.priority || 'medium', t.tags || [], meta, targetSessId, calcOrder, agentId, createdBy);
       createdTasks.push(created);
     }
     return createdTasks;

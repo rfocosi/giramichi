@@ -5,6 +5,7 @@ import { KanbanBoard } from './components/KanbanBoard.js';
 import { ActivityLogStream } from './components/ActivityLogStream.js';
 import { TaskDetailModal } from './components/TaskDetailModal.js';
 import { TagFilterBar } from './components/TagFilterBar.js';
+import { ReportsView } from './components/ReportsView.js';
 import { fetchConfig, buildApiUrl, isDemoMode } from './config.js';
 
 export const App: React.FC = () => {
@@ -18,6 +19,7 @@ export const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isActivityDrawerOpen, setIsActivityDrawerOpen] = useState(false);
   const [configError, setConfigError] = useState<string | null>(null);
+  const [activeView, setActiveView] = useState<'board' | 'reports'>('board');
 
   // Tag Filtering State
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -180,7 +182,7 @@ export const App: React.FC = () => {
 
       await new Promise((r) => setTimeout(r, 800));
 
-      // Step 3: Agent 1 adds tasks to Session A
+      // Step 3: Agent 1 adds tasks to Session A with telemetry metrics
       const batchARes = await fetch(buildApiUrl('/api/mcp-direct'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -195,6 +197,13 @@ export const App: React.FC = () => {
                 status_id: 'waiting',
                 priority: 'urgent',
                 tags: ['payment', 'stripe', 'backend'],
+                metrics: {
+                  model: 'claude-3-5-sonnet-20241022',
+                  prompt_tokens: 18400,
+                  completion_tokens: 1650,
+                  cached_tokens: 4200,
+                  duration_ms: 21000,
+                },
               },
               {
                 title: 'PayPal Checkout Flow API Integration',
@@ -202,6 +211,13 @@ export const App: React.FC = () => {
                 status_id: 'waiting',
                 priority: 'high',
                 tags: ['payment', 'paypal', 'api'],
+                metrics: {
+                  model: 'claude-3-5-sonnet-20241022',
+                  prompt_tokens: 14200,
+                  completion_tokens: 1100,
+                  cached_tokens: 2800,
+                  duration_ms: 15400,
+                },
               },
             ],
           },
@@ -210,7 +226,7 @@ export const App: React.FC = () => {
       const batchAData = await batchARes.json();
       const tasksA: Task[] = JSON.parse(batchAData.result.content[0].text).tasks;
 
-      // Step 4: Agent 2 adds tasks to Session B
+      // Step 4: Agent 2 adds tasks to Session B with telemetry metrics
       await fetch(buildApiUrl('/api/mcp-direct'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -225,6 +241,13 @@ export const App: React.FC = () => {
                 status_id: 'waiting',
                 priority: 'medium',
                 tags: ['analytics', 'streaming', 'data'],
+                metrics: {
+                  model: 'claude-3-5-haiku',
+                  prompt_tokens: 11200,
+                  completion_tokens: 950,
+                  cached_tokens: 2100,
+                  duration_ms: 10200,
+                },
               },
             ],
           },
@@ -244,6 +267,13 @@ export const App: React.FC = () => {
               task_id: tasksA[0].id,
               new_status_id: 'in_progress',
               reason: 'Agent started implementing Stripe Webhook HMAC verification.',
+              metrics: {
+                model: 'claude-3-5-sonnet-20241022',
+                prompt_tokens: 21000,
+                completion_tokens: 1850,
+                cached_tokens: 6500,
+                duration_ms: 24000,
+              },
             },
           }),
         });
@@ -259,6 +289,13 @@ export const App: React.FC = () => {
               task_id: tasksA[0].id,
               new_status_id: 'done',
               reason: 'Stripe webhook signature verified and unit tests passing.',
+              metrics: {
+                model: 'claude-3-5-sonnet-20241022',
+                prompt_tokens: 25400,
+                completion_tokens: 2200,
+                cached_tokens: 9800,
+                duration_ms: 32000,
+              },
             },
           }),
         });
@@ -308,27 +345,43 @@ export const App: React.FC = () => {
         isActivityDrawerOpen={isActivityDrawerOpen}
         onToggleActivityDrawer={() => setIsActivityDrawerOpen((prev) => !prev)}
         logCount={logs.length}
+        activeView={activeView}
+        onSelectView={(view) => setActiveView(view)}
       />
 
-      <TagFilterBar
-        availableTags={availableTags}
-        selectedTags={selectedTags}
-        onToggleTag={handleToggleTag}
-        onClearTags={handleClearTags}
-        matchMode={tagMatchMode}
-        onToggleMatchMode={handleToggleMatchMode}
-        totalFilteredCount={filteredTasks.length}
-        totalCount={tasks.length}
-      />
+      {activeView === 'board' ? (
+        <>
+          <TagFilterBar
+            availableTags={availableTags}
+            selectedTags={selectedTags}
+            onToggleTag={handleToggleTag}
+            onClearTags={handleClearTags}
+            matchMode={tagMatchMode}
+            onToggleMatchMode={handleToggleMatchMode}
+            totalFilteredCount={filteredTasks.length}
+            totalCount={tasks.length}
+          />
 
-      <div>
-        <KanbanBoard
-          statuses={workflow.statuses}
-          tasks={filteredTasks}
-          onTaskClick={(task) => setSelectedTask(task)}
-          onTagClick={handleToggleTag}
+          <div>
+            <KanbanBoard
+              statuses={workflow.statuses}
+              tasks={filteredTasks}
+              onTaskClick={(task) => setSelectedTask(task)}
+              onTagClick={handleToggleTag}
+            />
+          </div>
+        </>
+      ) : (
+        <ReportsView
+          selectedSessionId={selectedSessionId}
+          sessionsList={sessionsList}
+          tasks={tasks}
+          onSelectTaskId={(taskId) => {
+            const found = tasks.find((t) => t.id === taskId);
+            if (found) setSelectedTask(found);
+          }}
         />
-      </div>
+      )}
 
       <ActivityLogStream
         logs={logs}
@@ -346,3 +399,4 @@ export const App: React.FC = () => {
     </div>
   );
 };
+

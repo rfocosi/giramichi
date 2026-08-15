@@ -28,6 +28,13 @@ async function runDemoSimulation() {
         status_id: 'waiting',
         priority: 'urgent',
         tags: ['mcp', 'protocol', 'ai'],
+        metrics: {
+          model: 'claude-3-5-sonnet-20241022',
+          prompt_tokens: 16500,
+          completion_tokens: 1420,
+          cached_tokens: 4200,
+          duration_ms: 18500,
+        },
       },
       {
         title: 'Develop Real-Time SSE Board Sync API',
@@ -35,6 +42,13 @@ async function runDemoSimulation() {
         status_id: 'waiting',
         priority: 'high',
         tags: ['api', 'sse', 'realtime'],
+        metrics: {
+          model: 'claude-3-5-sonnet-20241022',
+          prompt_tokens: 12400,
+          completion_tokens: 980,
+          cached_tokens: 3100,
+          duration_ms: 12100,
+        },
       },
       {
         title: 'Design Read-Only Dark Glassmorphism Interface',
@@ -42,6 +56,13 @@ async function runDemoSimulation() {
         status_id: 'waiting',
         priority: 'medium',
         tags: ['frontend', 'react', 'design'],
+        metrics: {
+          model: 'claude-3-5-haiku',
+          prompt_tokens: 9800,
+          completion_tokens: 850,
+          cached_tokens: 2400,
+          duration_ms: 8900,
+        },
       },
     ],
   });
@@ -58,6 +79,13 @@ async function runDemoSimulation() {
       task_id: taskId,
       new_status_id: 'in_progress',
       reason: 'AI agent initiated code generation for MCP Server and schema definitions.',
+      metrics: {
+        model: 'claude-3-5-sonnet-20241022',
+        prompt_tokens: 18200,
+        completion_tokens: 1650,
+        cached_tokens: 6400,
+        duration_ms: 14200,
+      },
     });
     console.log(move1.content[0].text);
 
@@ -67,6 +95,13 @@ async function runDemoSimulation() {
       task_id: taskId,
       new_status_id: 'qa',
       reason: 'MCP server code implemented. Running type-checking and automated tests.',
+      metrics: {
+        model: 'claude-3-5-sonnet-20241022',
+        prompt_tokens: 21500,
+        completion_tokens: 1890,
+        cached_tokens: 8200,
+        duration_ms: 22400,
+      },
     });
     console.log(move2.content[0].text);
 
@@ -76,6 +111,13 @@ async function runDemoSimulation() {
       task_id: taskId,
       new_status_id: 'done',
       reason: 'All tests passed cleanly. Feature verified and deployed.',
+      metrics: {
+        model: 'claude-3-5-sonnet-20241022',
+        prompt_tokens: 24800,
+        completion_tokens: 2100,
+        cached_tokens: 11500,
+        duration_ms: 28600,
+      },
     });
     console.log(move3.content[0].text);
   }

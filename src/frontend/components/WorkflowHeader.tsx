@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sparkles, ShieldAlert, Cpu, Layers, Bot, Activity } from 'lucide-react';
+import { Sparkles, ShieldAlert, Cpu, Layers, Bot, Activity, LayoutGrid, BarChart3 } from 'lucide-react';
 import { Session } from '../../db/db.js';
 import { isDemoMode } from '../config.js';
 
@@ -16,6 +16,8 @@ interface WorkflowHeaderProps {
   onToggleActivityDrawer?: () => void;
   logCount?: number;
   isDemo?: boolean;
+  activeView?: 'board' | 'reports';
+  onSelectView?: (view: 'board' | 'reports') => void;
 }
 
 export const WorkflowHeader: React.FC<WorkflowHeaderProps> = ({
@@ -31,6 +33,8 @@ export const WorkflowHeader: React.FC<WorkflowHeaderProps> = ({
   onToggleActivityDrawer,
   logCount,
   isDemo,
+  activeView = 'board',
+  onSelectView,
 }) => {
   const showDemoButton = isDemo !== undefined ? isDemo : isDemoMode();
 
@@ -68,8 +72,66 @@ export const WorkflowHeader: React.FC<WorkflowHeaderProps> = ({
           </div>
         </div>
 
-        {/* Action Controls: Read-Only Workflow Badge, Session Selector, Activity Drawer Button & AI Sim Button */}
+        {/* View Switcher & Action Controls */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          {/* Primary View Switcher Tabs */}
+          {onSelectView && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                background: 'rgba(15, 23, 42, 0.7)',
+                padding: '4px',
+                borderRadius: '10px',
+                border: '1px solid var(--border-glass)',
+                boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.3)',
+              }}
+            >
+              <button
+                onClick={() => onSelectView('board')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 14px',
+                  borderRadius: '7px',
+                  border: 'none',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  background: activeView === 'board' ? 'linear-gradient(135deg, #6366f1, #4f46e5)' : 'transparent',
+                  color: activeView === 'board' ? '#ffffff' : 'var(--text-muted)',
+                  boxShadow: activeView === 'board' ? '0 2px 8px rgba(99, 102, 241, 0.4)' : 'none',
+                }}
+              >
+                <LayoutGrid size={15} />
+                <span>Kanban Board</span>
+              </button>
+              <button
+                onClick={() => onSelectView('reports')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 14px',
+                  borderRadius: '7px',
+                  border: 'none',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  background: activeView === 'reports' ? 'linear-gradient(135deg, #06b6d4, #0891b2)' : 'transparent',
+                  color: activeView === 'reports' ? '#ffffff' : 'var(--text-muted)',
+                  boxShadow: activeView === 'reports' ? '0 2px 8px rgba(6, 182, 212, 0.4)' : 'none',
+                }}
+              >
+                <BarChart3 size={15} />
+                <span>Analytics & Reports</span>
+              </button>
+            </div>
+          )}
+
           {/* Agent Session Filter */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(99, 102, 241, 0.1)', padding: '6px 12px', borderRadius: '8px', border: '1px solid rgba(99, 102, 241, 0.3)' }}>
             <Bot size={16} color="var(--accent-indigo)" />

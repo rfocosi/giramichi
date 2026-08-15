@@ -4,6 +4,7 @@ import { db } from '../db/index.js';
 import { handleToolCall } from '../mcp/tools.js';
 import { createHttpMcpRouter } from '../mcp/httpMcpServer.js';
 import { authenticateAgent } from '../auth/middleware.js';
+import { generateReportsData } from './reportsEngine.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -124,6 +125,26 @@ app.get('/api/activity', async (req: Request, res: Response) => {
     const sessionId = req.query.session_id ? (req.query.session_id as string) : undefined;
     const logs = await db.getActivityLogs(limit, sessionId);
     res.json({ success: true, logs });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Analytics & Reports API
+app.get('/api/reports', async (req: Request, res: Response) => {
+  try {
+    const sessionId = req.query.session_id ? (req.query.session_id as string) : undefined;
+    const timeframe = (req.query.timeframe as 'all' | '24h' | '7d' | '30d') || 'all';
+
+    const [tasks, logs, workflow, sessions] = await Promise.all([
+      db.getTasks(),
+      db.getActivityLogs(500),
+      db.getActiveWorkflow().catch(() => null),
+      db.getSessions(),
+    ]);
+
+    const reportsData = generateReportsData(tasks, logs, workflow, sessions, sessionId, timeframe);
+    res.json({ success: true, reports: reportsData });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
