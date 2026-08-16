@@ -7,7 +7,7 @@ import { TaskDetailModal } from './components/TaskDetailModal.js';
 import { TagFilterBar } from './components/TagFilterBar.js';
 import { ReportsView } from './components/ReportsView.js';
 import { Footer } from './components/Footer.js';
-import { fetchConfig, buildApiUrl, isDemoMode } from './config.js';
+import { fetchConfig, buildApiUrl } from './config.js';
 
 const parseRouteState = (): { sessionId: string; view: 'board' | 'reports'; taskId: string | null } => {
   if (typeof window === 'undefined') {
@@ -67,7 +67,6 @@ export const App: React.FC = () => {
   const [sessionsList, setSessionsList] = useState<Session[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState<string>(initialRoute.sessionId);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [isSimulating, setIsSimulating] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isActivityDrawerOpen, setIsActivityDrawerOpen] = useState(false);
   const [configError, setConfigError] = useState<string | null>(null);
@@ -157,6 +156,22 @@ export const App: React.FC = () => {
       const data = await res.json();
       if (data.success) {
         setSessionsList(data.sessions);
+        if (selectedSessionId && selectedSessionId !== 'all' && data.sessions) {
+          const isSessionValid = data.sessions.some((s: Session) => s.id === selectedSessionId);
+          if (!isSessionValid) {
+            console.warn(`[Giramichi] Session "${selectedSessionId}" is expired or non-existent. Redirecting to /`);
+            setSelectedSessionId('all');
+            if (typeof window !== 'undefined') {
+              const urlObj = new URL(window.location.href);
+              urlObj.searchParams.delete('session_id');
+              urlObj.searchParams.delete('session');
+              if (urlObj.pathname.includes('/sessions/')) {
+                urlObj.pathname = '/';
+              }
+              window.history.replaceState({}, '', urlObj.pathname + (urlObj.search ? urlObj.search : ''));
+            }
+          }
+        }
       }
     } catch (err) {
       console.error('Error fetching sessions:', err);
@@ -170,12 +185,31 @@ export const App: React.FC = () => {
       const res = await fetch(buildApiUrl(url));
       const data = await res.json();
       if (data.success) {
+        if (data.sessions) {
+          setSessionsList(data.sessions);
+          if (sessId && sessId !== 'all') {
+            const isSessionValid = data.sessions.some((s: Session) => s.id === sessId);
+            if (!isSessionValid) {
+              console.warn(`[Giramichi] Session "${sessId}" is expired or non-existent. Redirecting to /`);
+              setSelectedSessionId('all');
+              if (typeof window !== 'undefined') {
+                const urlObj = new URL(window.location.href);
+                urlObj.searchParams.delete('session_id');
+                urlObj.searchParams.delete('session');
+                if (urlObj.pathname.includes('/sessions/')) {
+                  urlObj.pathname = '/';
+                }
+                window.history.replaceState({}, '', urlObj.pathname + (urlObj.search ? urlObj.search : ''));
+              }
+              fetchBoard('all');
+              return;
+            }
+          }
+        }
+
         setWorkflow(data.workflow);
         setTasks(data.tasks);
         setLogs(data.logs);
-        if (data.sessions) {
-          setSessionsList(data.sessions);
-        }
 
         // Open deep linked task if specified in URL or pending ref
         const taskIdToOpen = pendingTaskIdRef.current || parseRouteState().taskId;
@@ -288,174 +322,7 @@ export const App: React.FC = () => {
     return selectedTags.some((t) => taskTags.includes(t));
   });
 
-  // Run a multi-agent simulation demo over MCP
-  const handleTriggerSim = async () => {
-    if (!isDemoMode()) {
-      console.warn('[Giramichi] Simulation demo task creation blocked: demo mode is not active.');
-      return;
-    }
-    setIsSimulating(true);
-    try {
-      // Step 1: Agent 1 creates Session A ("Payment Service Agent")
-      const sessARes = await fetch(buildApiUrl('/api/mcp-direct'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: 'giramichi_create_session',
-          args: {
-            name: 'Payment Gateway Integration',
-            description: 'Agent handling Stripe & PayPal payment processing microservice',
-            agent_id: 'Claude-3.5-Sonnet',
-          },
-        }),
-      });
-      const sessAData = await sessARes.json();
-      const sessionA: Session = JSON.parse(sessAData.result.content[0].text).session;
 
-      // Step 2: Agent 2 creates Session B ("Analytics Agent")
-      const sessBRes = await fetch(buildApiUrl('/api/mcp-direct'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: 'giramichi_create_session',
-          args: {
-            name: 'Realtime Analytics Engine',
-            description: 'Agent handling telemetry aggregation and SSE metrics pipeline',
-            agent_id: 'Antigravity-Agent-2',
-          },
-        }),
-      });
-      const sessBData = await sessBRes.json();
-      const sessionB: Session = JSON.parse(sessBData.result.content[0].text).session;
-
-      await new Promise((r) => setTimeout(r, 800));
-
-      // Step 3: Agent 1 adds tasks to Session A with telemetry metrics
-      const batchARes = await fetch(buildApiUrl('/api/mcp-direct'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: 'giramichi_batch_create_tasks',
-          args: {
-            session_id: sessionA.id,
-            tasks: [
-              {
-                title: 'Stripe Webhook Handler & Idempotency Store',
-                description: 'Implement signature verification and DB transaction lock for payment events.',
-                status_id: 'waiting',
-                priority: 'urgent',
-                tags: ['payment', 'stripe', 'backend'],
-                metrics: {
-                  model: 'claude-3-5-sonnet-20241022',
-                  prompt_tokens: 18400,
-                  completion_tokens: 1650,
-                  cached_tokens: 4200,
-                  duration_ms: 21000,
-                },
-              },
-              {
-                title: 'PayPal Checkout Flow API Integration',
-                description: 'Set up v2 checkout order creation and capture endpoints.',
-                status_id: 'waiting',
-                priority: 'high',
-                tags: ['payment', 'paypal', 'api'],
-                metrics: {
-                  model: 'claude-3-5-sonnet-20241022',
-                  prompt_tokens: 14200,
-                  completion_tokens: 1100,
-                  cached_tokens: 2800,
-                  duration_ms: 15400,
-                },
-              },
-            ],
-          },
-        }),
-      });
-      const batchAData = await batchARes.json();
-      const tasksA: Task[] = JSON.parse(batchAData.result.content[0].text).tasks;
-
-      // Step 4: Agent 2 adds tasks to Session B with telemetry metrics
-      await fetch(buildApiUrl('/api/mcp-direct'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: 'giramichi_batch_create_tasks',
-          args: {
-            session_id: sessionB.id,
-            tasks: [
-              {
-                title: 'ClickHouse Event Streaming Pipeline',
-                description: 'Configure real-time log ingestion for system metrics.',
-                status_id: 'waiting',
-                priority: 'medium',
-                tags: ['analytics', 'streaming', 'data'],
-                metrics: {
-                  model: 'claude-3-5-haiku',
-                  prompt_tokens: 11200,
-                  completion_tokens: 950,
-                  cached_tokens: 2100,
-                  duration_ms: 10200,
-                },
-              },
-            ],
-          },
-        }),
-      });
-
-      await new Promise((r) => setTimeout(r, 1000));
-
-      // Step 5: Agent 1 moves Stripe Task in Session A to In Progress -> Done
-      if (tasksA.length > 0) {
-        await fetch(buildApiUrl('/api/mcp-direct'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: 'giramichi_move_task',
-            args: {
-              task_id: tasksA[0].id,
-              new_status_id: 'in_progress',
-              reason: 'Agent started implementing Stripe Webhook HMAC verification.',
-              metrics: {
-                model: 'claude-3-5-sonnet-20241022',
-                prompt_tokens: 21000,
-                completion_tokens: 1850,
-                cached_tokens: 6500,
-                duration_ms: 24000,
-              },
-            },
-          }),
-        });
-
-        await new Promise((r) => setTimeout(r, 1200));
-
-        await fetch(buildApiUrl('/api/mcp-direct'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: 'giramichi_move_task',
-            args: {
-              task_id: tasksA[0].id,
-              new_status_id: 'done',
-              reason: 'Stripe webhook signature verified and unit tests passing.',
-              metrics: {
-                model: 'claude-3-5-sonnet-20241022',
-                prompt_tokens: 25400,
-                completion_tokens: 2200,
-                cached_tokens: 9800,
-                duration_ms: 32000,
-              },
-            },
-          }),
-        });
-      }
-    } catch (err) {
-      console.error('Simulation error:', err);
-    } finally {
-      setIsSimulating(false);
-      fetchBoard(selectedSessionId);
-      fetchSessions();
-    }
-  };
 
   if (configError) {
     return (
@@ -488,8 +355,6 @@ export const App: React.FC = () => {
         sessionsList={sessionsList}
         selectedSessionId={selectedSessionId}
         onSelectSession={handleSelectSession}
-        onTriggerSim={handleTriggerSim}
-        isSimulating={isSimulating}
         isActivityDrawerOpen={isActivityDrawerOpen}
         onToggleActivityDrawer={() => setIsActivityDrawerOpen((prev) => !prev)}
         logCount={logs.length}

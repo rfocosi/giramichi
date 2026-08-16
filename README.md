@@ -61,7 +61,7 @@ flowchart TD
 giramichi/
 ├── data/                    # SQLite database directory (data/giramichi.db)
 ├── docs/                    # Screenshots, logo assets, and architectural documents
-├── scripts/                 # Simulation and helper scripts
+├── scripts/                 # Utility and helper scripts
 ├── src/
 │   ├── auth/                # Optional JWT / Keycloak authentication middleware
 │   ├── db/                  # Database abstraction layer
@@ -159,16 +159,6 @@ For comprehensive deployment instructions using pre-built images from GitHub Con
   # Run Stdio container
   docker run -i --rm -v "$(pwd)/data:/app/data" giramichi-mcp-stdio
   ```
-
-#### 5. Run the Interactive AI Simulation Demo
-
-To see Giramichi in action without connecting an external LLM, run the bundled AI simulation script:
-
-```bash
-npm run demo
-```
-This script programmatically creates a custom workflow, batch-adds tasks, transitions tasks across stages with logged rationale, and displays board updates in real time.
-
 ---
 
 ## ⚙️ Environment Configuration & Variables
@@ -197,7 +187,7 @@ Giramichi's React dashboard uses `GIRAMICHI_API_URL` to connect to the backend E
 2. **Container Startup Runtime Injection**:
    When running via Docker (`giramichi-frontend`), the container entrypoint script (`scripts/generate-frontend-config.sh`) generates `/usr/share/nginx/html/config.js` at startup based on the `GIRAMICHI_API_URL` environment variable passed to the frontend container:
    ```javascript
-   window.__CONFIG__ = { apiUrl: "http://localhost:3001", isDemo: false };
+   window.__CONFIG__ = { apiUrl: "http://localhost:3001" };
    ```
 
 3. **Fallback & Validation**:

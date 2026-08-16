@@ -6,8 +6,8 @@ import { authenticateAgent } from '../../src/auth/middleware.js';
 test.describe('Audit User Actions Verification Suite', () => {
   let adapter: SqliteAdapter;
 
-  test.beforeAll(async () => {
-    adapter = new SqliteAdapter();
+  test.beforeEach(async () => {
+    adapter = new SqliteAdapter(':memory:');
     await adapter.init();
   });
 

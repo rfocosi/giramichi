@@ -10,15 +10,12 @@
     "server": "tsx src/server/index.ts",
     "mcp": "tsx src/mcp/mcpServer.ts",
     "mcp:http": "tsx src/mcp/httpMcpServer.ts",
-    "demo": "VITE_DEMO=true vite",
-    "demo:docker": "VITE_DEMO=true docker compose up -d",
-    "demo:cli": "tsx scripts/demo_ai_simulation.ts",
-    "demo:device": "tsx scripts/demo_device_flow.ts",
-    "test:e2e": "playwright test tests/e2e",
-    "test:api": "playwright test tests/api",
-    "test:mcp": "playwright test tests/api/mcp-server.spec.ts",
-    "test:unit": "playwright test tests/unit",
-    "test:all": "playwright test"
+    "auth:device": "tsx scripts/demo_device_flow.ts",
+    "test:e2e": "DB_FILE=giramichi-test.db playwright test tests/e2e",
+    "test:api": "DB_FILE=giramichi-test.db playwright test tests/api",
+    "test:mcp": "DB_FILE=giramichi-test.db playwright test tests/api/mcp-server.spec.ts",
+    "test:unit": "DB_FILE=giramichi-test.db playwright test tests/unit",
+    "test:all": "DB_FILE=giramichi-test.db playwright test"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.6.0",
