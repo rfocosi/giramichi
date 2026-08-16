@@ -13,12 +13,13 @@ const UNIT_MULTIPLIERS_MS: Record<string, number> = {
  * Special value: 'all' returns null (indicating no date filtering).
  * If invalid, logs a warning and falls back to default 3D.
  *
- * @param periodStr Optional period string (e.g., '12H', '3D', '2W', '1Y', 'all'). If omitted, reads process.env.GIRAMICHI_SESSION_HISTORY_DISPLAY_PERIOD.
+ * @param periodStr Optional period string (e.g., '12H', '3D', '2W', '1Y', 'all'). If omitted, reads process.env.SESSION_HISTORY_DISPLAY_PERIOD (or legacy process.env.GIRAMICHI_SESSION_HISTORY_DISPLAY_PERIOD).
  * @param referenceTime Optional reference timestamp in ms (defaults to Date.now()).
  * @returns Date cutoff or null if 'all' / unrestricted.
  */
 export function parseDisplayPeriod(periodStr?: string, referenceTime: number = Date.now()): Date | null {
-  const rawPeriod = (periodStr !== undefined ? periodStr : process.env.GIRAMICHI_SESSION_HISTORY_DISPLAY_PERIOD) ?? DEFAULT_DISPLAY_PERIOD;
+  const envPeriod = process.env.SESSION_HISTORY_DISPLAY_PERIOD ?? process.env.GIRAMICHI_SESSION_HISTORY_DISPLAY_PERIOD;
+  const rawPeriod = (periodStr !== undefined ? periodStr : envPeriod) ?? DEFAULT_DISPLAY_PERIOD;
   const trimmed = rawPeriod.trim();
 
   if (trimmed.toLowerCase() === 'all') {
@@ -27,7 +28,7 @@ export function parseDisplayPeriod(periodStr?: string, referenceTime: number = D
 
   const match = trimmed.match(/^(\d+)\s*([hdwmyHDWMY])$/);
   if (!match) {
-    console.warn(`[Giramichi] Invalid GIRAMICHI_SESSION_HISTORY_DISPLAY_PERIOD format "${trimmed}". Falling back to default "${DEFAULT_DISPLAY_PERIOD}".`);
+    console.warn(`[Giramichi] Invalid SESSION_HISTORY_DISPLAY_PERIOD format "${trimmed}". Falling back to default "${DEFAULT_DISPLAY_PERIOD}".`);
     return new Date(referenceTime - 3 * UNIT_MULTIPLIERS_MS.D);
   }
 

@@ -61,18 +61,51 @@ test.describe('Period Parser Utility Tests', () => {
     expect(resultUnknownUnit).toEqual(expectedFallback);
   });
 
-  test('should respect process.env.GIRAMICHI_SESSION_HISTORY_DISPLAY_PERIOD when arg is omitted', () => {
-    const originalEnv = process.env.GIRAMICHI_SESSION_HISTORY_DISPLAY_PERIOD;
+  test('should respect process.env.SESSION_HISTORY_DISPLAY_PERIOD when arg is omitted', () => {
+    const originalEnv = process.env.SESSION_HISTORY_DISPLAY_PERIOD;
+    const originalLegacyEnv = process.env.GIRAMICHI_SESSION_HISTORY_DISPLAY_PERIOD;
     try {
-      process.env.GIRAMICHI_SESSION_HISTORY_DISPLAY_PERIOD = '5D';
+      delete process.env.GIRAMICHI_SESSION_HISTORY_DISPLAY_PERIOD;
+      process.env.SESSION_HISTORY_DISPLAY_PERIOD = '5D';
       const result = parseDisplayPeriod(undefined, refTime);
       expect(result).not.toBeNull();
       expect(result!.getTime()).toBe(refTime - 5 * 24 * 60 * 60 * 1000);
 
-      process.env.GIRAMICHI_SESSION_HISTORY_DISPLAY_PERIOD = 'all';
+      process.env.SESSION_HISTORY_DISPLAY_PERIOD = 'all';
       expect(parseDisplayPeriod(undefined, refTime)).toBeNull();
     } finally {
-      process.env.GIRAMICHI_SESSION_HISTORY_DISPLAY_PERIOD = originalEnv;
+      process.env.SESSION_HISTORY_DISPLAY_PERIOD = originalEnv;
+      process.env.GIRAMICHI_SESSION_HISTORY_DISPLAY_PERIOD = originalLegacyEnv;
+    }
+  });
+
+  test('should fallback to legacy process.env.GIRAMICHI_SESSION_HISTORY_DISPLAY_PERIOD when new var is unset', () => {
+    const originalEnv = process.env.SESSION_HISTORY_DISPLAY_PERIOD;
+    const originalLegacyEnv = process.env.GIRAMICHI_SESSION_HISTORY_DISPLAY_PERIOD;
+    try {
+      delete process.env.SESSION_HISTORY_DISPLAY_PERIOD;
+      process.env.GIRAMICHI_SESSION_HISTORY_DISPLAY_PERIOD = '2W';
+      const result = parseDisplayPeriod(undefined, refTime);
+      expect(result).not.toBeNull();
+      expect(result!.getTime()).toBe(refTime - 2 * 7 * 24 * 60 * 60 * 1000);
+    } finally {
+      process.env.SESSION_HISTORY_DISPLAY_PERIOD = originalEnv;
+      process.env.GIRAMICHI_SESSION_HISTORY_DISPLAY_PERIOD = originalLegacyEnv;
+    }
+  });
+
+  test('should give precedence to SESSION_HISTORY_DISPLAY_PERIOD over GIRAMICHI_SESSION_HISTORY_DISPLAY_PERIOD', () => {
+    const originalEnv = process.env.SESSION_HISTORY_DISPLAY_PERIOD;
+    const originalLegacyEnv = process.env.GIRAMICHI_SESSION_HISTORY_DISPLAY_PERIOD;
+    try {
+      process.env.SESSION_HISTORY_DISPLAY_PERIOD = '1H';
+      process.env.GIRAMICHI_SESSION_HISTORY_DISPLAY_PERIOD = '10D';
+      const result = parseDisplayPeriod(undefined, refTime);
+      expect(result).not.toBeNull();
+      expect(result!.getTime()).toBe(refTime - 1 * 60 * 60 * 1000);
+    } finally {
+      process.env.SESSION_HISTORY_DISPLAY_PERIOD = originalEnv;
+      process.env.GIRAMICHI_SESSION_HISTORY_DISPLAY_PERIOD = originalLegacyEnv;
     }
   });
 
