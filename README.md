@@ -207,7 +207,7 @@ Giramichi's React dashboard uses `GIRAMICHI_API_URL` to connect to the backend E
 
 You can connect Giramichi to any MCP-compliant application (Claude Desktop, Claude Code CLI, OpenCode, GitHub Copilot, Cursor, Windsurf, Google Antigravity IDE, Cline, Zed, etc.).
 
-For complete step-by-step setup guides and configuration snippets for all major AI development interfaces, see [**MCP.md**](MCP.md).
+For complete step-by-step setup guides and configuration snippets for all major AI development interfaces, see [**MCP.md**](docs/MCP.md).
 
 ### Quick Configuration Example (Claude Desktop)
 

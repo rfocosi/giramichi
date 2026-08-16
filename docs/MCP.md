@@ -2,7 +2,7 @@
 
 > **Model Context Protocol (MCP) Server Setup & Connection Guide**
 
-[Giramichi](README.md) exposes an autonomous project management control plane through a Model Context Protocol (MCP) server. It supports **Stdio**, **SSE**, and **Streamable HTTP** transports, allowing modern AI coding assistants—such as **Claude Desktop**, **Claude Code**, **OpenCode**, **GitHub Copilot**, **Cursor**, **Windsurf**, **Google Antigravity**, and **Cline**—to create workflows, manage tasks, and update Kanban card statuses programmatically.
+[Giramichi](../README.md) exposes an autonomous project management control plane through a Model Context Protocol (MCP) server. It supports **Stdio**, **SSE**, and **Streamable HTTP** transports, allowing modern AI coding assistants—such as **Claude Desktop**, **Claude Code**, **OpenCode**, **GitHub Copilot**, **Cursor**, **Windsurf**, **Google Antigravity**, and **Cline**—to create workflows, manage tasks, and update Kanban card statuses programmatically.
 
 ---
 
