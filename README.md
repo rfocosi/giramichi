@@ -183,7 +183,7 @@ Giramichi is configured via `.env` (see [.env.example](.env.example)):
 | `DB_TYPE` | `sqlite` | Database engine (`sqlite`, `postgres`, `mysql`, `mssql`). |
 | `DB_DIR` / `DB_FILE` | `data` / `giramichi.db` | SQLite storage directory and filename. |
 | `DATABASE_URL` | *(none)* | Connection URI for PostgreSQL, MySQL, or MSSQL. |
-| `GIRAMICHI_SESSION_HISTORY_DISPLAY_PERIOD` | `3D` | Active session filter window based on `updated_at`. Supports `H` (hours), `D` (days), `W` (weeks), `Y` (years), or `all`. |
+| `SESSION_HISTORY_DISPLAY_PERIOD` | `3D` | Active session filter window based on `updated_at`. Supports `H` (hours), `D` (days), `W` (weeks), `Y` (years), or `all`. |
 | `AUTH_MODE` | `disabled` | Authentication mode (`disabled` or `oauth2`). |
 | `OAUTH2_ISSUER` / `OAUTH2_JWKS_URI` | *(none)* | Keycloak / OIDC identity provider issuer and JWKS URI. |
 

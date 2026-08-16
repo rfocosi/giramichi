@@ -198,7 +198,7 @@ docker run -d \
   -e NODE_ENV=production \
   -e PORT=3001 \
   -e DB_TYPE=sqlite \
-  -e GIRAMICHI_SESSION_HISTORY_DISPLAY_PERIOD=3D \
+  -e SESSION_HISTORY_DISPLAY_PERIOD=3D \
   --restart unless-stopped \
   ghcr.io/rfocosi/giramichi-server:latest
 ```
@@ -213,7 +213,7 @@ docker run -d \
   -e PORT=3001 \
   -e DB_TYPE=postgres \
   -e DATABASE_URL=postgres://giramichi:secret_password@postgres-host:5432/giramichi \
-  -e GIRAMICHI_SESSION_HISTORY_DISPLAY_PERIOD=3D \
+  -e SESSION_HISTORY_DISPLAY_PERIOD=3D \
   --restart unless-stopped \
   ghcr.io/rfocosi/giramichi-server:latest
 ```
@@ -303,7 +303,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3001
-      - GIRAMICHI_SESSION_HISTORY_DISPLAY_PERIOD=3D
+      - SESSION_HISTORY_DISPLAY_PERIOD=3D
       - DB_TYPE=sqlite
     ports:
       - "3001:3001"
@@ -356,7 +356,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3001
-      - GIRAMICHI_SESSION_HISTORY_DISPLAY_PERIOD=3D
+      - SESSION_HISTORY_DISPLAY_PERIOD=3D
       - AUTH_MODE=disabled # Or 'oauth2'
     ports:
       - "3001:3001"
@@ -428,7 +428,7 @@ services:
       - PORT=3001
       - DB_TYPE=postgres
       - DATABASE_URL=postgres://giramichi:secret_password@postgres:5432/giramichi
-      - GIRAMICHI_SESSION_HISTORY_DISPLAY_PERIOD=3D
+      - SESSION_HISTORY_DISPLAY_PERIOD=3D
     ports:
       - "3001:3001"
     depends_on:
@@ -491,7 +491,7 @@ metadata:
 data:
   NODE_ENV: "production"
   PORT: "3001"
-  GIRAMICHI_SESSION_HISTORY_DISPLAY_PERIOD: "3D"
+  SESSION_HISTORY_DISPLAY_PERIOD: "3D"
   GIRAMICHI_API_URL: "http://giramichi-server.giramichi.svc.cluster.local:3001"
   DB_TYPE: "sqlite"
 ```
@@ -767,7 +767,7 @@ All available environment variables are organized below by domain. You can also 
 | :--- | :--- | :---: | :--- |
 | `PORT` | `server` | `3001` | Express server HTTP port. |
 | `NODE_ENV` | `server`, `mcp` | `development` | Node environment (`development` or `production`). |
-| `GIRAMICHI_SESSION_HISTORY_DISPLAY_PERIOD` | `server` | `3D` | Active session filter window (`1H`, `3D`, `2W`, `1Y`, or `all`). |
+| `SESSION_HISTORY_DISPLAY_PERIOD` | `server` | `3D` | Active session filter window (`1H`, `3D`, `2W`, `1Y`, or `all`). |
 
 ### 2. Frontend UI Dashboard
 | Variable | Target Component | Default | Description |
