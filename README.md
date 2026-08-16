@@ -6,7 +6,7 @@
 
 ![Giramichi Dashboard](docs/dashboard.png)
 
---## 🌟 Key Features
+## 🌟 Key Features
 
 - **MCP-Native Control Plane**: 12 dedicated Model Context Protocol tools allowing AI assistants (Claude, Cursor, Antigravity IDE, custom subagents) to manage sessions, workflows, task backlogs, decimal execution orders, and card transitions.
 - **Multi-Agent Session Isolation**: Group tasks, transitions, and metrics by discrete agent sessions (e.g. per-feature, per-agent, or sprint) with seamless session switching.
