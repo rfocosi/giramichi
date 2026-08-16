@@ -4,12 +4,10 @@
 
 **Giramichi** is an AI-first project management platform that replaces manual issue tracking with an autonomous AI execution model. Instead of humans dragging task cards, setting statuses, or creating column workflows, **AI coding agents create, structure, update, and transition tasks programmatically** via standard [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) tools while humans observe progress in real time through a read-only, glassmorphism web dashboard.
 
-<p align="center">
-  <video src="docs/giramichi_demonstration_subtitled.mp4" width="100%" style="max-width: 1000px;" controls autoplay loop muted></video>
-</p>
+[![Giramichi Dashboard](docs/dashboard.png)](docs/giramichi_demonstration_subtitled.mp4)
 
 <p align="center">
-  <em>🎬 <a href="docs/giramichi_demonstration_subtitled.mp4"><strong>Watch the Full Narrated Video Demonstration with Subtitles</strong></a> (1 min 54 sec)</em>
+  <em>🎬 <strong><a href="docs/giramichi_demonstration_subtitled.mp4">Click here to watch the Full Narrated Video Demonstration with Subtitles (1 min 54s)</a></strong></em>
 </p>
 
 ## 🌟 Key Features
