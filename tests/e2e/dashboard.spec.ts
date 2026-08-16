@@ -121,8 +121,9 @@ test.describe('Giramichi Dashboard E2E Tests', () => {
     await expect(copyIdBtn).toHaveAttribute('aria-label', /Copy Session ID/);
     await expect(copyLinkBtn).toHaveAttribute('aria-label', /Copy Session Link/);
 
-    // On default 'all' view, Copy ID is disabled
+    // On default 'all' view, both Copy ID and Copy Link are disabled
     await expect(copyIdBtn).toBeDisabled();
+    await expect(copyLinkBtn).toBeDisabled();
   });
 
   test('should enable Copy ID when a session is selected and update URL', async ({ page, context }) => {

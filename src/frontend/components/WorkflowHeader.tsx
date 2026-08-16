@@ -78,14 +78,10 @@ export const WorkflowHeader: React.FC<WorkflowHeaderProps> = ({
   };
 
   const handleCopySessionLink = async () => {
+    if (!selectedSessionId || selectedSessionId === 'all') return;
     try {
       const url = new URL(window.location.href);
-      if (selectedSessionId && selectedSessionId !== 'all') {
-        url.searchParams.set('session_id', selectedSessionId);
-      } else {
-        url.searchParams.delete('session_id');
-        url.searchParams.delete('session');
-      }
+      url.searchParams.set('session_id', selectedSessionId);
       await copyTextToClipboard(url.toString());
       setCopiedLink(true);
       setTimeout(() => setCopiedLink(false), 2000);
@@ -283,11 +279,12 @@ export const WorkflowHeader: React.FC<WorkflowHeaderProps> = ({
           <button
             id="copy-session-link-btn"
             onClick={handleCopySessionLink}
+            disabled={!selectedSessionId || selectedSessionId === 'all'}
             title={
-              copiedLink
+              selectedSessionId === 'all'
+                ? 'Select a specific session to copy its link'
+                : copiedLink
                 ? 'Session link copied!'
-                : selectedSessionId === 'all'
-                ? 'Copy link to dashboard'
                 : `Copy link to session (${selectedSessionId})`
             }
             aria-label={copiedLink ? 'Session link copied' : 'Copy Session Link'}
@@ -302,11 +299,16 @@ export const WorkflowHeader: React.FC<WorkflowHeaderProps> = ({
                 ? '1px solid var(--accent-emerald)'
                 : '1px solid var(--border-glass)',
               borderRadius: '8px',
-              color: copiedLink ? 'var(--accent-emerald)' : 'var(--text-main)',
+              color: copiedLink
+                ? 'var(--accent-emerald)'
+                : selectedSessionId === 'all'
+                ? 'var(--text-dim)'
+                : 'var(--text-main)',
               padding: '7px 9px',
               fontSize: '0.8rem',
               fontWeight: 600,
-              cursor: 'pointer',
+              cursor: selectedSessionId === 'all' ? 'not-allowed' : 'pointer',
+              opacity: selectedSessionId === 'all' ? 0.5 : 1,
               transition: 'all 0.2s ease',
             }}
           >
