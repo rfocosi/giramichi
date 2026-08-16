@@ -4,7 +4,6 @@ declare const __APP_VERSION__: string | undefined;
 
 export interface AppConfig {
   apiUrl: string;
-  isDemo?: boolean;
   version?: string;
 }
 
@@ -16,7 +15,6 @@ declare global {
 
 let appConfig: AppConfig = {
   apiUrl: '',
-  isDemo: false,
   version: typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.3.0',
 };
 
@@ -34,18 +32,12 @@ export const fetchConfig = async (): Promise<AppConfig> => {
     if (metaEnv.VITE_APP_VERSION) {
       appConfig.version = metaEnv.VITE_APP_VERSION;
     }
-    if (metaEnv.VITE_DEMO === 'true' || metaEnv.VITE_DEMO === '1' || metaEnv.DEMO === 'true') {
-      appConfig.isDemo = true;
-    }
   }
 
   // Check runtime configuration injected by frontend image (window.__CONFIG__ from /config.js)
   if (typeof window !== 'undefined' && window.__CONFIG__) {
     if (window.__CONFIG__.apiUrl) {
       appConfig.apiUrl = window.__CONFIG__.apiUrl;
-    }
-    if (typeof window.__CONFIG__.isDemo === 'boolean') {
-      appConfig.isDemo = window.__CONFIG__.isDemo;
     }
     if (window.__CONFIG__.version) {
       appConfig.version = window.__CONFIG__.version;
@@ -76,13 +68,6 @@ export const getDashboardVersion = (): string => {
   return '0.3.0';
 };
 
-export const isDemoMode = (): boolean => {
-  const metaEnv = (import.meta as any).env;
-  if (metaEnv && (metaEnv.VITE_DEMO === 'true' || metaEnv.VITE_DEMO === '1')) {
-    return true;
-  }
-  return Boolean(appConfig.isDemo || (typeof window !== 'undefined' && window.__CONFIG__?.isDemo));
-};
 
 export const getApiUrl = (): string => {
   if (!appConfig.apiUrl) {

@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { Sparkles, ShieldAlert, Layers, Bot, Activity, LayoutGrid, BarChart3, Copy, Link, Check } from 'lucide-react';
+import { ShieldAlert, Layers, Bot, Activity, LayoutGrid, BarChart3, Copy, Link, Check } from 'lucide-react';
 import { Session } from '../../db/db.js';
-import { isDemoMode } from '../config.js';
 
 interface WorkflowHeaderProps {
   workflowName: string;
@@ -10,12 +9,9 @@ interface WorkflowHeaderProps {
   sessionsList: Session[];
   selectedSessionId: string;
   onSelectSession: (id: string) => void;
-  onTriggerSim: () => void;
-  isSimulating: boolean;
   isActivityDrawerOpen?: boolean;
   onToggleActivityDrawer?: () => void;
   logCount?: number;
-  isDemo?: boolean;
   activeView?: 'board' | 'reports';
   onSelectView?: (view: 'board' | 'reports') => void;
   syncStatus?: 'connected' | 'connecting' | 'disconnected';
@@ -28,17 +24,13 @@ export const WorkflowHeader: React.FC<WorkflowHeaderProps> = ({
   sessionsList,
   selectedSessionId,
   onSelectSession,
-  onTriggerSim,
-  isSimulating,
   isActivityDrawerOpen,
   onToggleActivityDrawer,
   logCount,
-  isDemo,
   activeView = 'board',
   onSelectView,
   syncStatus = 'connected',
 }) => {
-  const showDemoButton = isDemo !== undefined ? isDemo : isDemoMode();
   const [copiedId, setCopiedId] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
 
@@ -368,34 +360,6 @@ export const WorkflowHeader: React.FC<WorkflowHeaderProps> = ({
             </button>
           )}
 
-          {/* Simulation Button */}
-          {showDemoButton && (
-            <button
-              onClick={onTriggerSim}
-              disabled={isSimulating}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                background: isSimulating
-                  ? 'rgba(99, 102, 241, 0.4)'
-                  : 'linear-gradient(135deg, #6366f1, #06b6d4)',
-                border: 'none',
-                borderRadius: '8px',
-                color: '#ffffff',
-                padding: '7px 16px',
-                fontWeight: 600,
-                fontSize: '0.825rem',
-                cursor: isSimulating ? 'not-allowed' : 'pointer',
-                boxShadow: '0 4px 12px rgba(99, 102, 241, 0.3)',
-                transition: 'all 0.2s ease',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              <Sparkles size={15} />
-              {isSimulating ? 'Running Multi-Agent Simulation...' : 'Simulate Multi-Agent Workflows'}
-            </button>
-          )}
         </div>
       </div>
     </header>

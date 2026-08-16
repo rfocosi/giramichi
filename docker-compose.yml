@@ -35,7 +35,6 @@ services:
     container_name: giramichi-frontend
     environment:
       - GIRAMICHI_API_URL=${GIRAMICHI_API_URL:-}
-      - VITE_DEMO=${VITE_DEMO:-false}
     ports:
       - "3000:80"
     depends_on:
