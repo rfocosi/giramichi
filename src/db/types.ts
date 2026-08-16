@@ -82,7 +82,7 @@ export interface IDatabaseAdapter {
   setActiveWorkflow(workflowId: string, agentId?: string, lastUpdatedBy?: UserId): Promise<Workflow>;
   
   // Tasks
-  getTasks(workflowId?: string, sessionId?: string): Promise<Task[]>;
+  getTasks(workflowId?: string, sessionId?: string, since?: string | Date | null): Promise<Task[]>;
   getTaskById(taskId: string): Promise<Task | null>;
   createTask(
     title: string,
@@ -107,7 +107,7 @@ export interface IDatabaseAdapter {
   
   // Activity Logs
   logActivity(log: Omit<ActivityLog, 'id' | 'timestamp'>): Promise<void>;
-  getActivityLogs(limit?: number, sessionId?: string): Promise<ActivityLog[]>;
+  getActivityLogs(limit?: number, sessionId?: string, since?: string | Date | null): Promise<ActivityLog[]>;
   subscribe(listener: EventListener): () => void;
 }
 

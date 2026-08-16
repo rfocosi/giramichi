@@ -386,11 +386,45 @@ export class MysqlAdapter implements IDatabaseAdapter {
   }
 
   // Tasks
-  public async getTasks(workflowId?: string, sessionId?: string): Promise<Task[]> {
+  public async getTasks(workflowId?: string, sessionId?: string, since?: string | Date | null): Promise<Task[]> {
+    let cutoffIso: string | null = null;
+    if (since === undefined) {
+      const cutoff = parseDisplayPeriod();
+      cutoffIso = cutoff ? cutoff.toISOString() : null;
+    } else if (since instanceof Date) {
+      cutoffIso = since.toISOString();
+    } else if (typeof since === 'string' && since.trim().toLowerCase() !== 'all') {
+      const cutoff = parseDisplayPeriod(since);
+      cutoffIso = cutoff ? cutoff.toISOString() : null;
+    }
+
     let rows: any[];
     if (sessionId && sessionId !== 'all') {
-      const [res]: any = await this.pool.query(`SELECT * FROM tasks WHERE session_id = ? ORDER BY \`order\` ASC, created_at ASC`, [sessionId]);
-      rows = res;
+      if (workflowId) {
+        const [res]: any = await this.pool.query(`SELECT * FROM tasks WHERE session_id = ? AND workflow_id = ? ORDER BY \`order\` ASC, created_at ASC`, [sessionId, workflowId]);
+        rows = res;
+      } else {
+        const [res]: any = await this.pool.query(`SELECT * FROM tasks WHERE session_id = ? ORDER BY \`order\` ASC, created_at ASC`, [sessionId]);
+        rows = res;
+      }
+    } else if (cutoffIso) {
+      if (workflowId) {
+        const [res]: any = await this.pool.query(`
+          SELECT t.* FROM tasks t
+          INNER JOIN sessions s ON t.session_id = s.id
+          WHERE t.workflow_id = ? AND s.updated_at >= ?
+          ORDER BY t.\`order\` ASC, t.created_at ASC
+        `, [workflowId, cutoffIso]);
+        rows = res;
+      } else {
+        const [res]: any = await this.pool.query(`
+          SELECT t.* FROM tasks t
+          INNER JOIN sessions s ON t.session_id = s.id
+          WHERE s.updated_at >= ?
+          ORDER BY t.\`order\` ASC, t.created_at ASC
+        `, [cutoffIso]);
+        rows = res;
+      }
     } else if (workflowId) {
       const [res]: any = await this.pool.query(`SELECT * FROM tasks WHERE workflow_id = ? ORDER BY \`order\` ASC, created_at ASC`, [workflowId]);
       rows = res;
@@ -607,10 +641,29 @@ export class MysqlAdapter implements IDatabaseAdapter {
     this.notify('LOG_ADDED', fullLog);
   }
 
-  public async getActivityLogs(limit = 50, sessionId?: string): Promise<ActivityLog[]> {
+  public async getActivityLogs(limit = 50, sessionId?: string, since?: string | Date | null): Promise<ActivityLog[]> {
+    let cutoffIso: string | null = null;
+    if (since === undefined) {
+      const cutoff = parseDisplayPeriod();
+      cutoffIso = cutoff ? cutoff.toISOString() : null;
+    } else if (since instanceof Date) {
+      cutoffIso = since.toISOString();
+    } else if (typeof since === 'string' && since.trim().toLowerCase() !== 'all') {
+      const cutoff = parseDisplayPeriod(since);
+      cutoffIso = cutoff ? cutoff.toISOString() : null;
+    }
+
     let rows: any[];
     if (sessionId && sessionId !== 'all') {
       const [res]: any = await this.pool.query(`SELECT * FROM activity_logs WHERE session_id = ? ORDER BY timestamp DESC LIMIT ?`, [sessionId, limit]);
+      rows = res;
+    } else if (cutoffIso) {
+      const [res]: any = await this.pool.query(`
+        SELECT a.* FROM activity_logs a
+        LEFT JOIN sessions s ON a.session_id = s.id
+        WHERE a.session_id IS NULL OR s.updated_at >= ?
+        ORDER BY a.timestamp DESC LIMIT ?
+      `, [cutoffIso, limit]);
       rows = res;
     } else {
       const [res]: any = await this.pool.query(`SELECT * FROM activity_logs ORDER BY timestamp DESC LIMIT ?`, [limit]);

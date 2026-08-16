@@ -420,18 +420,45 @@ export class MssqlAdapter implements IDatabaseAdapter {
     return activeWf;
   }
 
-  // Tasks
-  public async getTasks(workflowId?: string, sessionId?: string): Promise<Task[]> {
+  public async getTasks(workflowId?: string, sessionId?: string, since?: string | Date | null): Promise<Task[]> {
+    let cutoffIso: string | null = null;
+    if (since === undefined) {
+      const cutoff = parseDisplayPeriod();
+      cutoffIso = cutoff ? cutoff.toISOString() : null;
+    } else if (since instanceof Date) {
+      cutoffIso = since.toISOString();
+    } else if (typeof since === 'string' && since.trim().toLowerCase() !== 'all') {
+      const cutoff = parseDisplayPeriod(since);
+      cutoffIso = cutoff ? cutoff.toISOString() : null;
+    }
+
     let req = this.pool.request();
-    let query = `SELECT * FROM tasks`;
+    let query = `SELECT t.* FROM tasks t`;
+    const conditions: string[] = [];
+
     if (sessionId && sessionId !== 'all') {
       req = req.input('session_id', sql.NVarChar, sessionId);
-      query += ` WHERE session_id = @session_id`;
-    } else if (workflowId) {
-      req = req.input('workflow_id', sql.NVarChar, workflowId);
-      query += ` WHERE workflow_id = @workflow_id`;
+      conditions.push(`t.session_id = @session_id`);
+      if (workflowId) {
+        req = req.input('workflow_id', sql.NVarChar, workflowId);
+        conditions.push(`t.workflow_id = @workflow_id`);
+      }
+    } else {
+      if (cutoffIso) {
+        query += ` INNER JOIN sessions s ON t.session_id = s.id`;
+        req = req.input('cutoff', sql.NVarChar, cutoffIso);
+        conditions.push(`s.updated_at >= @cutoff`);
+      }
+      if (workflowId) {
+        req = req.input('workflow_id', sql.NVarChar, workflowId);
+        conditions.push(`t.workflow_id = @workflow_id`);
+      }
     }
-    query += ` ORDER BY [order] ASC, created_at ASC`;
+
+    if (conditions.length > 0) {
+      query += ` WHERE ` + conditions.join(' AND ');
+    }
+    query += ` ORDER BY t.[order] ASC, t.created_at ASC`;
 
     const res = await req.query(query);
     return res.recordset.map((r) => ({
@@ -673,14 +700,28 @@ export class MssqlAdapter implements IDatabaseAdapter {
     this.notify('LOG_ADDED', fullLog);
   }
 
-  public async getActivityLogs(limit = 50, sessionId?: string): Promise<ActivityLog[]> {
+  public async getActivityLogs(limit = 50, sessionId?: string, since?: string | Date | null): Promise<ActivityLog[]> {
+    let cutoffIso: string | null = null;
+    if (since === undefined) {
+      const cutoff = parseDisplayPeriod();
+      cutoffIso = cutoff ? cutoff.toISOString() : null;
+    } else if (since instanceof Date) {
+      cutoffIso = since.toISOString();
+    } else if (typeof since === 'string' && since.trim().toLowerCase() !== 'all') {
+      const cutoff = parseDisplayPeriod(since);
+      cutoffIso = cutoff ? cutoff.toISOString() : null;
+    }
+
     let req = this.pool.request().input('limit', sql.Int, limit);
-    let query = `SELECT TOP (@limit) * FROM activity_logs`;
+    let query = `SELECT TOP (@limit) a.* FROM activity_logs a`;
     if (sessionId && sessionId !== 'all') {
       req = req.input('session_id', sql.NVarChar, sessionId);
-      query += ` WHERE session_id = @session_id`;
+      query += ` WHERE a.session_id = @session_id`;
+    } else if (cutoffIso) {
+      req = req.input('cutoff', sql.NVarChar, cutoffIso);
+      query += ` LEFT JOIN sessions s ON a.session_id = s.id WHERE a.session_id IS NULL OR s.updated_at >= @cutoff`;
     }
-    query += ` ORDER BY timestamp DESC`;
+    query += ` ORDER BY a.timestamp DESC`;
 
     const res = await req.query(query);
     return res.recordset.map((r) => ({
