@@ -141,9 +141,11 @@ Launches the Vite development server (typically at `http://localhost:5173`). Ope
   ```
   Runs a standalone HTTP MCP server on `http://localhost:3002`.
 
-#### 4. Running via Docker & Docker Compose 🐳
+#### 4. Running via Docker, GHCR, Compose & Kubernetes 🐳
 
-- **Start Dashboard & API Backend**:
+For comprehensive deployment instructions using pre-built images from GitHub Container Registry (`ghcr.io/rfocosi/giramichi-*`), `docker run`, `docker compose`, and full Kubernetes manifests, see the [**Deployment & Running Guide**](docs/RUNNING_GUIDE.md).
+
+- **Quick Start with Docker Compose**:
   ```bash
   docker compose up -d giramichi-server giramichi-frontend
   ```

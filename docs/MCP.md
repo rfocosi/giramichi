@@ -377,6 +377,8 @@ curl -s -X POST http://<host>:3001/mcp \
 
 ## 🐳 Docker Stdio & Dashboard Setup
 
+For full container orchestration guides (including Docker Run, GHCR pre-built images, Compose, and Kubernetes manifests), refer to the [**Deployment & Running Guide**](RUNNING_GUIDE.md).
+
 To run both the **Giramichi Read-Only Dashboard** and the **Stdio MCP Server** concurrently sharing real-time database state:
 
 1. **Start Dashboard & API Backend in Docker**:
