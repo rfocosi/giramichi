@@ -8,11 +8,6 @@ test.describe('Giramichi Dashboard E2E Tests', () => {
   test('should load the dashboard and verify header branding', async ({ page }) => {
     // Check main title
     await expect(page.locator('h1')).toContainText('Giramichi');
-    
-    // Check AI badge
-    const badge = page.locator('.ai-badge');
-    await expect(badge).toBeVisible();
-    await expect(badge).toContainText('MULTI-AGENT SESSIONS');
   });
 
   test('should render Kanban columns and task cards', async ({ page }) => {

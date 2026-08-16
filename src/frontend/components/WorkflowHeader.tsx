@@ -1,12 +1,12 @@
 import React from 'react';
-import { Sparkles, ShieldAlert, Cpu, Layers, Bot, Activity, LayoutGrid, BarChart3 } from 'lucide-react';
+import { Sparkles, ShieldAlert, Layers, Bot, Activity, LayoutGrid, BarChart3 } from 'lucide-react';
 import { Session } from '../../db/db.js';
 import { isDemoMode } from '../config.js';
 
 interface WorkflowHeaderProps {
   workflowName: string;
   workflowDesc: string;
-  totalTasks: number;
+  totalTasks?: number;
   sessionsList: Session[];
   selectedSessionId: string;
   onSelectSession: (id: string) => void;
@@ -62,9 +62,6 @@ export const WorkflowHeader: React.FC<WorkflowHeaderProps> = ({
               <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.6rem', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.02em' }}>
                 Giramichi <span style={{ fontSize: '1rem', fontWeight: 400, color: 'var(--accent-indigo)', marginLeft: '4px' }}>煌道</span>
               </h1>
-              <div className="ai-badge">
-                <Cpu size={14} /> MULTI-AGENT SESSIONS
-              </div>
             </div>
             <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
               Autonomous Execution Engine — Multi-Agent Session Pipeline & Real-Time Human Oversight
@@ -247,8 +244,6 @@ export const WorkflowHeader: React.FC<WorkflowHeaderProps> = ({
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem' }}>
           <span className="pulse-dot"></span>
           <span style={{ color: 'var(--accent-emerald)', fontWeight: 500 }}>Live Realtime Sync</span>
-          <span style={{ color: 'var(--text-dim)', margin: '0 4px' }}>|</span>
-          <span style={{ color: 'var(--text-muted)' }}>Tasks: {totalTasks}</span>
         </div>
       </div>
     </header>
