@@ -1,8 +1,11 @@
 /// <reference types="vite/client" />
 
+declare const __APP_VERSION__: string | undefined;
+
 export interface AppConfig {
   apiUrl: string;
   isDemo?: boolean;
+  version?: string;
 }
 
 declare global {
@@ -14,6 +17,7 @@ declare global {
 let appConfig: AppConfig = {
   apiUrl: '',
   isDemo: false,
+  version: typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.3.0',
 };
 
 export const fetchConfig = async (): Promise<AppConfig> => {
@@ -26,6 +30,9 @@ export const fetchConfig = async (): Promise<AppConfig> => {
       appConfig.apiUrl = metaEnv.VITE_GIRAMICHI_API_URL;
     } else if (metaEnv.VITE_API_URL) {
       appConfig.apiUrl = metaEnv.VITE_API_URL;
+    }
+    if (metaEnv.VITE_APP_VERSION) {
+      appConfig.version = metaEnv.VITE_APP_VERSION;
     }
     if (metaEnv.VITE_DEMO === 'true' || metaEnv.VITE_DEMO === '1' || metaEnv.DEMO === 'true') {
       appConfig.isDemo = true;
@@ -40,6 +47,9 @@ export const fetchConfig = async (): Promise<AppConfig> => {
     if (typeof window.__CONFIG__.isDemo === 'boolean') {
       appConfig.isDemo = window.__CONFIG__.isDemo;
     }
+    if (window.__CONFIG__.version) {
+      appConfig.version = window.__CONFIG__.version;
+    }
   }
 
   if (!appConfig.apiUrl) {
@@ -47,6 +57,23 @@ export const fetchConfig = async (): Promise<AppConfig> => {
   }
 
   return appConfig;
+};
+
+export const getDashboardVersion = (): string => {
+  if (appConfig.version) {
+    return appConfig.version;
+  }
+  if (typeof __APP_VERSION__ !== 'undefined') {
+    return __APP_VERSION__;
+  }
+  const metaEnv = (import.meta as any).env;
+  if (metaEnv?.VITE_APP_VERSION) {
+    return metaEnv.VITE_APP_VERSION;
+  }
+  if (typeof window !== 'undefined' && window.__CONFIG__?.version) {
+    return window.__CONFIG__.version;
+  }
+  return '0.3.0';
 };
 
 export const isDemoMode = (): boolean => {

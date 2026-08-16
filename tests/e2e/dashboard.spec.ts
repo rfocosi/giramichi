@@ -93,4 +93,23 @@ test.describe('Giramichi Dashboard E2E Tests', () => {
     await closeBtn.click();
     await expect(drawer).not.toBeVisible();
   });
+
+  test('should render page footer with dashboard and server versions', async ({ page }) => {
+    // Locate footer
+    const footer = page.locator('#dashboard-footer');
+    await expect(footer).toBeVisible();
+
+    // Verify Dashboard version pill
+    const dashboardPill = page.locator('#dashboard-version');
+    await expect(dashboardPill).toBeVisible();
+    await expect(dashboardPill).toContainText('Dashboard');
+    await expect(dashboardPill).toContainText(/v\d+\.\d+\.\d+/);
+
+    // Verify Server version pill
+    const serverPill = page.locator('#server-version');
+    await expect(serverPill).toBeVisible();
+    await expect(serverPill).toContainText('Server');
+    await expect(serverPill).toContainText(/v\d+\.\d+\.\d+/);
+  });
 });
+
