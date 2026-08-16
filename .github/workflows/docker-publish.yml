@@ -78,5 +78,3 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=${{ matrix.image-suffix }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.image-suffix }}
