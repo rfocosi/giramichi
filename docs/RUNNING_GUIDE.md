@@ -760,27 +760,54 @@ npm run mcp:http
 
 ## ⚙️ Configuration & Environment Variables
 
+All available environment variables are organized below by domain. You can also inspect the template at [.env.example](file:///home/rfocosi/workspace/giramichi/.env.example).
+
+### 1. Core Server & Dashboard API
 | Variable | Target Component | Default | Description |
 | :--- | :--- | :---: | :--- |
 | `PORT` | `server` | `3001` | Express server HTTP port. |
-| `GIRAMICHI_API_URL` | `frontend` | *(Empty)* | Backend API URL reachable by the client browser (e.g. `http://localhost:3001`). |
-| `VITE_DEMO` / `DEMO` | `frontend` | `false` | When `true`, enables mock demo mode in UI. |
+| `NODE_ENV` | `server`, `mcp` | `development` | Node environment (`development` or `production`). |
 | `GIRAMICHI_SESSION_HISTORY_DISPLAY_PERIOD` | `server` | `3D` | Active session filter window (`1H`, `3D`, `2W`, `1Y`, or `all`). |
+
+### 2. Frontend UI Dashboard
+| Variable | Target Component | Default | Description |
+| :--- | :--- | :---: | :--- |
+| `GIRAMICHI_API_URL` | `frontend` | *(Empty)* | Backend API URL reachable by the client browser (e.g. `http://localhost:3001`). Injected at container startup. |
+| `VITE_DEMO` / `DEMO` | `frontend` | `false` | When `true`, enables mock demo mode in UI. |
+| `GIRAMICHI_VERSION` / `VITE_APP_VERSION` | `frontend` | `0.3.0` | Injects application version tag into the dashboard header. |
+
+### 3. Database Backend Options
+| Variable | Target Component | Default | Description |
+| :--- | :--- | :---: | :--- |
 | `DB_TYPE` | `server`, `mcp` | `sqlite` | Database engine (`sqlite`, `postgres` / `postgresql`, `mysql` / `mariadb`, `mssql` / `sqlserver`). |
-| `DATABASE_URL` | `server`, `mcp` | *(None)* | Full connection URI (e.g. `postgres://user:pass@host:5432/db`, `mysql://...`, `mssql://...`). |
+| `DATABASE_URL` | `server`, `mcp` | *(None)* | Full connection URI (e.g. `postgres://user:pass@host:5432/db`, `mysql://...`, `mssql://...`). Takes precedence over discrete variables. |
 | `DB_HOST` | `server`, `mcp` | `localhost` | Hostname/IP for PostgreSQL, MySQL, or MSSQL. |
-| `DB_PORT` | `server`, `mcp` | `5432` / `3306` / `1433` | Database port. |
-| `DB_USER` | `server`, `mcp` | *(None)* | Database username. |
+| `DB_PORT` | `server`, `mcp` | `5432` / `3306` / `1433` | Database connection port. |
+| `DB_USER` | `server`, `mcp` | *(None)* | Database username (`postgres`, `root`, `sa`, etc.). |
 | `DB_PASSWORD` | `server`, `mcp` | *(None)* | Database password. |
-| `DB_NAME` | `server`, `mcp` | `giramichi` | Database name. |
-| `DB_SSL` | `server`, `mcp` | `false` | Set to `true` to enable SSL for PostgreSQL or MySQL. |
-| `DB_ENCRYPT` | `server`, `mcp` | `false` | Set to `true` to enable TLS encryption for MSSQL / Azure SQL. |
+| `DB_NAME` | `server`, `mcp` | `giramichi` | Database database/catalog name. |
+| `DB_SSL` | `server`, `mcp` | `false` | Enable SSL encryption for PostgreSQL or MySQL (`true`/`false`). |
+| `DB_ENCRYPT` | `server`, `mcp` | `false` | Enable TLS encryption for Microsoft SQL Server / Azure SQL (`true`/`false`). |
 | `DB_DIR` | `server`, `mcp` | `data` | Directory for SQLite database file when `DB_TYPE=sqlite`. |
 | `DB_FILE` | `server`, `mcp` | `giramichi.db` | Filename for SQLite database when `DB_TYPE=sqlite`. |
-| `MCP_HTTP_PORT` | `mcp` | `3002` | HTTP port for standalone MCP container. |
-| `REDIS_URL` | `server`, `mcp` | *(None)* | Redis connection string for SSE multi-instance clustering. |
+
+### 4. Optional Standalone MCP & Redis Clustering
+| Variable | Target Component | Default | Description |
+| :--- | :--- | :---: | :--- |
+| `MCP_HTTP_PORT` | `mcp` | `3002` | HTTP port for standalone `giramichi-mcp` container. |
+| `REDIS_URL` | `server`, `mcp` | *(None)* | Redis connection string (e.g. `redis://localhost:6379`) for multi-instance SSE synchronization. |
+| `REDIS_HOST` | `server`, `mcp` | `localhost` | Discrete Redis hostname/IP. |
+| `REDIS_PORT` | `server`, `mcp` | `6379` | Discrete Redis port. |
+| `REDIS_PASSWORD` | `server`, `mcp` | *(None)* | Discrete Redis password. |
+
+### 5. Authentication & OAuth2 / Keycloak
+| Variable | Target Component | Default | Description |
+| :--- | :--- | :---: | :--- |
 | `AUTH_MODE` | `server` | `disabled` | Authentication mode (`disabled` or `oauth2`). |
-| `OAUTH2_JWKS_URI` | `server` | *(None)* | Keycloak/IdP JWKS endpoint for agent token verification. |
+| `OAUTH2_ISSUER` | `server` | `http://localhost:8080/realms/giramichi` | OAuth2 / Keycloak realm issuer URL. |
+| `OAUTH2_JWKS_URI` | `server` | `${issuer}/protocol/openid-connect/certs` | JWKS endpoint for validating agent Bearer JWT signatures. |
+| `OAUTH2_CLIENT_ID` | `server` | `giramichi-agent` | Expected client ID. |
+| `OAUTH2_AUDIENCE` | `server` | *(None)* | Optional JWT audience claim validation. |
 
 ---
 
