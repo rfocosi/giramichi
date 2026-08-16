@@ -1,4 +1,4 @@
-# Giramichi (煌道) 🚀
+# <img src="docs/giramichi.png" alt="Giramichi Logo" width="36" height="36" valign="middle" /> Giramichi (煌道)
 
 > **AI-Guided Project Engine with Model Context Protocol (MCP) and Real-Time Read-Only Dashboard**
 
