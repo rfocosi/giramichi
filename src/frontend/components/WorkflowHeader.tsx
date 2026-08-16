@@ -82,6 +82,12 @@ export const WorkflowHeader: React.FC<WorkflowHeaderProps> = ({
     try {
       const url = new URL(window.location.href);
       url.searchParams.set('session_id', selectedSessionId);
+      if (activeView === 'reports') {
+        url.searchParams.set('view', 'reports');
+      } else {
+        url.searchParams.delete('view');
+        url.searchParams.delete('tab');
+      }
       await copyTextToClipboard(url.toString());
       setCopiedLink(true);
       setTimeout(() => setCopiedLink(false), 2000);
@@ -282,10 +288,10 @@ export const WorkflowHeader: React.FC<WorkflowHeaderProps> = ({
             disabled={!selectedSessionId || selectedSessionId === 'all'}
             title={
               selectedSessionId === 'all'
-                ? 'Select a specific session to copy its link'
+                ? `Select a specific session to copy its ${activeView === 'reports' ? 'reports ' : ''}link`
                 : copiedLink
-                ? 'Session link copied!'
-                : `Copy link to session (${selectedSessionId})`
+                ? `${activeView === 'reports' ? 'Reports link' : 'Session link'} copied!`
+                : `Copy link to session ${activeView === 'reports' ? 'reports ' : ''}(${selectedSessionId})`
             }
             aria-label={copiedLink ? 'Session link copied' : 'Copy Session Link'}
             style={{

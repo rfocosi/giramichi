@@ -91,4 +91,59 @@ test.describe('Giramichi Reports & Analytics UI E2E Tests', () => {
     const count = await rows.count();
     expect(count).toBeGreaterThan(0);
   });
+
+  test('5. should route directly to Analytics & Reports via ?view=reports query parameter', async ({ page }) => {
+    // Navigate directly with ?view=reports
+    await page.goto('/?view=reports');
+
+    // Verify Reports view is automatically active
+    await expect(page.locator('text=Agent Velocity')).toBeVisible();
+    await expect(page.locator('text=Stage Dwell Times & Bottlenecks')).toBeVisible();
+  });
+
+  test('6. should route directly to specific session Reports via ?session_id=...&view=reports', async ({ page }) => {
+    // First get an available session ID
+    await page.goto('/');
+    const sessionSelect = page.locator('header select');
+    await expect(sessionSelect).toBeVisible();
+    const options = sessionSelect.locator('option');
+    const optionCount = await options.count();
+
+    if (optionCount > 1) {
+      const targetSessionId = await options.nth(1).getAttribute('value');
+      if (targetSessionId && targetSessionId !== 'all') {
+        // Navigate directly to session's reports
+        await page.goto(`/?session_id=${targetSessionId}&view=reports`);
+
+        // Verify select dropdown has correct session selected
+        await expect(sessionSelect).toHaveValue(targetSessionId);
+
+        // Verify Reports view is active
+        await expect(page.locator('text=Agent Velocity')).toBeVisible();
+        await expect(page.locator('text=Stage Dwell Times & Bottlenecks')).toBeVisible();
+      }
+    }
+  });
+
+  test('7. should route directly to specific session Reports via /sessions/.../reports pathname', async ({ page }) => {
+    await page.goto('/');
+    const sessionSelect = page.locator('header select');
+    await expect(sessionSelect).toBeVisible();
+    const options = sessionSelect.locator('option');
+    const optionCount = await options.count();
+
+    if (optionCount > 1) {
+      const targetSessionId = await options.nth(1).getAttribute('value');
+      if (targetSessionId && targetSessionId !== 'all') {
+        // Navigate directly with clean path
+        await page.goto(`/sessions/${targetSessionId}/reports`);
+
+        // Verify select dropdown has correct session selected
+        await expect(sessionSelect).toHaveValue(targetSessionId);
+
+        // Verify Reports view is active
+        await expect(page.locator('text=Agent Velocity')).toBeVisible();
+      }
+    }
+  });
 });
