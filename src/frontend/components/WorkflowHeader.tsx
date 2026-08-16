@@ -1,5 +1,5 @@
-import React from 'react';
-import { Sparkles, ShieldAlert, Layers, Bot, Activity, LayoutGrid, BarChart3 } from 'lucide-react';
+import React, { useState } from 'react';
+import { Sparkles, ShieldAlert, Layers, Bot, Activity, LayoutGrid, BarChart3, Copy, Link, Check } from 'lucide-react';
 import { Session } from '../../db/db.js';
 import { isDemoMode } from '../config.js';
 
@@ -39,6 +39,62 @@ export const WorkflowHeader: React.FC<WorkflowHeaderProps> = ({
   syncStatus = 'connected',
 }) => {
   const showDemoButton = isDemo !== undefined ? isDemo : isDemoMode();
+  const [copiedId, setCopiedId] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  const copyTextToClipboard = async (text: string): Promise<void> => {
+    let copied = false;
+    if (navigator.clipboard) {
+      try {
+        await navigator.clipboard.writeText(text);
+        copied = true;
+      } catch (_) {
+        // Continue to fallback
+      }
+    }
+    if (!copied) {
+      try {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.left = '-999999px';
+        textarea.style.top = '-999999px';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      } catch (err) {
+        console.error('Clipboard copy error:', err);
+      }
+    }
+  };
+
+  const handleCopySessionId = async () => {
+    if (!selectedSessionId || selectedSessionId === 'all') return;
+    await copyTextToClipboard(selectedSessionId);
+    setCopiedId(true);
+    setTimeout(() => setCopiedId(false), 2000);
+  };
+
+  const handleCopySessionLink = async () => {
+    if (!selectedSessionId || selectedSessionId === 'all') return;
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set('session_id', selectedSessionId);
+      if (activeView === 'reports') {
+        url.searchParams.set('view', 'reports');
+      } else {
+        url.searchParams.delete('view');
+        url.searchParams.delete('tab');
+      }
+      await copyTextToClipboard(url.toString());
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy session link:', err);
+    }
+  };
 
   return (
     <header style={{ marginBottom: '20px' }}>
@@ -184,6 +240,86 @@ export const WorkflowHeader: React.FC<WorkflowHeaderProps> = ({
               ))}
             </select>
           </div>
+
+          {/* Copy Session ID Button */}
+          <button
+            id="copy-session-id-btn"
+            onClick={handleCopySessionId}
+            disabled={!selectedSessionId || selectedSessionId === 'all'}
+            title={
+              selectedSessionId === 'all'
+                ? 'Select a specific session to copy its ID'
+                : copiedId
+                ? 'Session ID copied!'
+                : `Copy Session ID (${selectedSessionId})`
+            }
+            aria-label={copiedId ? 'Session ID copied' : 'Copy Session ID'}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: copiedId
+                ? 'rgba(16, 185, 129, 0.15)'
+                : 'rgba(255, 255, 255, 0.05)',
+              border: copiedId
+                ? '1px solid var(--accent-emerald)'
+                : '1px solid var(--border-glass)',
+              borderRadius: '8px',
+              color: copiedId
+                ? 'var(--accent-emerald)'
+                : selectedSessionId === 'all'
+                ? 'var(--text-dim)'
+                : 'var(--text-main)',
+              padding: '7px 9px',
+              fontSize: '0.8rem',
+              fontWeight: 600,
+              cursor: selectedSessionId === 'all' ? 'not-allowed' : 'pointer',
+              opacity: selectedSessionId === 'all' ? 0.5 : 1,
+              transition: 'all 0.2s ease',
+            }}
+          >
+            {copiedId ? <Check size={15} color="var(--accent-emerald)" /> : <Copy size={15} />}
+          </button>
+
+          {/* Copy Session Link Button */}
+          <button
+            id="copy-session-link-btn"
+            onClick={handleCopySessionLink}
+            disabled={!selectedSessionId || selectedSessionId === 'all'}
+            title={
+              selectedSessionId === 'all'
+                ? `Select a specific session to copy its ${activeView === 'reports' ? 'reports ' : ''}link`
+                : copiedLink
+                ? `${activeView === 'reports' ? 'Reports link' : 'Session link'} copied!`
+                : `Copy link to session ${activeView === 'reports' ? 'reports ' : ''}(${selectedSessionId})`
+            }
+            aria-label={copiedLink ? 'Session link copied' : 'Copy Session Link'}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: copiedLink
+                ? 'rgba(16, 185, 129, 0.15)'
+                : 'rgba(255, 255, 255, 0.05)',
+              border: copiedLink
+                ? '1px solid var(--accent-emerald)'
+                : '1px solid var(--border-glass)',
+              borderRadius: '8px',
+              color: copiedLink
+                ? 'var(--accent-emerald)'
+                : selectedSessionId === 'all'
+                ? 'var(--text-dim)'
+                : 'var(--text-main)',
+              padding: '7px 9px',
+              fontSize: '0.8rem',
+              fontWeight: 600,
+              cursor: selectedSessionId === 'all' ? 'not-allowed' : 'pointer',
+              opacity: selectedSessionId === 'all' ? 0.5 : 1,
+              transition: 'all 0.2s ease',
+            }}
+          >
+            {copiedLink ? <Check size={15} color="var(--accent-emerald)" /> : <Link size={15} />}
+          </button>
 
           {/* Read-Only Workflow Badge */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(255,255,255,0.05)', padding: '6px 12px', borderRadius: '8px', border: '1px solid var(--border-glass)' }}>

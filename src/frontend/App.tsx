@@ -9,19 +9,93 @@ import { ReportsView } from './components/ReportsView.js';
 import { Footer } from './components/Footer.js';
 import { fetchConfig, buildApiUrl, isDemoMode } from './config.js';
 
+const parseRouteState = (): { sessionId: string; view: 'board' | 'reports' } => {
+  if (typeof window === 'undefined') {
+    return { sessionId: 'all', view: 'board' };
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  const pathname = window.location.pathname.toLowerCase();
+
+  // Determine view
+  let view: 'board' | 'reports' = 'board';
+  const viewParam = (params.get('view') || params.get('tab') || '').toLowerCase();
+  if (
+    viewParam === 'reports' ||
+    viewParam === 'analytics' ||
+    pathname.endsWith('/reports') ||
+    pathname.endsWith('/analytics') ||
+    pathname === '/reports' ||
+    pathname === '/analytics'
+  ) {
+    view = 'reports';
+  }
+
+  // Determine session ID
+  let sessionId = params.get('session_id') || params.get('session') || '';
+  if (!sessionId) {
+    const sessionMatch = window.location.pathname.match(/\/sessions\/([^\/]+)/i);
+    if (sessionMatch && sessionMatch[1]) {
+      sessionId = decodeURIComponent(sessionMatch[1]);
+    }
+  }
+
+  return {
+    sessionId: sessionId || 'all',
+    view,
+  };
+};
+
 export const App: React.FC = () => {
+  const initialRoute = parseRouteState();
   const [workflow, setWorkflow] = useState<Workflow | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [sessionsList, setSessionsList] = useState<Session[]>([]);
-  const [selectedSessionId, setSelectedSessionId] = useState<string>('all');
+  const [selectedSessionId, setSelectedSessionId] = useState<string>(initialRoute.sessionId);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isSimulating, setIsSimulating] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isActivityDrawerOpen, setIsActivityDrawerOpen] = useState(false);
   const [configError, setConfigError] = useState<string | null>(null);
-  const [activeView, setActiveView] = useState<'board' | 'reports'>('board');
+  const [activeView, setActiveView] = useState<'board' | 'reports'>(initialRoute.view);
   const [syncStatus, setSyncStatus] = useState<'connected' | 'connecting' | 'disconnected'>('connecting');
+
+  // Keep URL query parameters in sync with selected session and active view
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+
+      // Sync session_id
+      if (selectedSessionId && selectedSessionId !== 'all') {
+        url.searchParams.set('session_id', selectedSessionId);
+      } else {
+        url.searchParams.delete('session_id');
+        url.searchParams.delete('session');
+      }
+
+      // Sync view
+      if (activeView === 'reports') {
+        url.searchParams.set('view', 'reports');
+      } else {
+        url.searchParams.delete('view');
+        url.searchParams.delete('tab');
+      }
+
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, [selectedSessionId, activeView]);
+
+  // Handle browser back/forward navigation
+  useEffect(() => {
+    const handlePopState = () => {
+      const route = parseRouteState();
+      setSelectedSessionId(route.sessionId);
+      setActiveView(route.view);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   // Tag Filtering State
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
