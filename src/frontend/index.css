@@ -379,3 +379,30 @@ body {
   animation: spin 1s linear infinite;
 }
 
+/* Dashboard Footer & Version Pills */
+.dashboard-footer {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.dashboard-footer:hover {
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.version-pill {
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.version-pill:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.16) !important;
+}
+
+@media (max-width: 640px) {
+  .dashboard-footer {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 12px !important;
+  }
+}
+

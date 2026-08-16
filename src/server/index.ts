@@ -5,6 +5,7 @@ import { handleToolCall } from '../mcp/tools.js';
 import { createHttpMcpRouter } from '../mcp/httpMcpServer.js';
 import { authenticateAgent } from '../auth/middleware.js';
 import { generateReportsData } from './reportsEngine.js';
+import pkg from '../../package.json';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -162,6 +163,11 @@ app.post('/api/mcp-direct', authenticateAgent, async (req: Request, res: Respons
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
+});
+
+// Server Version API
+app.get('/api/version', (req: Request, res: Response) => {
+  res.json({ success: true, version: pkg.version || '0.1.0' });
 });
 
 app.listen(PORT, () => {

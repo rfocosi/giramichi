@@ -83,6 +83,16 @@ test.describe('Giramichi API Endpoints Tests', () => {
       expect(Array.isArray(body.workflows)).toBe(true);
       expect(body.workflows.length).toBeGreaterThan(0);
     });
+
+    test('GET /api/version - should return server version', async ({ request }) => {
+      const response = await request.get(`${API_BASE_URL}/api/version`);
+      expect(response.status()).toBe(200);
+
+      const body = await response.json();
+      expect(body.success).toBe(true);
+      expect(typeof body.version).toBe('string');
+      expect(body.version.length).toBeGreaterThan(0);
+    });
   });
 
   test.describe('2. Tasks, Activity Log & Error Handling', () => {

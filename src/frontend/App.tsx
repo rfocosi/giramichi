@@ -6,6 +6,7 @@ import { ActivityLogStream } from './components/ActivityLogStream.js';
 import { TaskDetailModal } from './components/TaskDetailModal.js';
 import { TagFilterBar } from './components/TagFilterBar.js';
 import { ReportsView } from './components/ReportsView.js';
+import { Footer } from './components/Footer.js';
 import { fetchConfig, buildApiUrl, isDemoMode } from './config.js';
 
 export const App: React.FC = () => {
@@ -414,6 +415,8 @@ export const App: React.FC = () => {
         onClose={() => setSelectedTask(null)}
         onTagClick={handleToggleTag}
       />
+
+      <Footer />
     </div>
   );
 };
