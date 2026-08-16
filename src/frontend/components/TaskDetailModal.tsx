@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Task, ActivityLog, Status } from '../../db/db.js';
-import { X, Bot, Clock, Tag as TagIcon, ArrowRight, ShieldCheck } from 'lucide-react';
+import { X, Bot, Clock, Tag as TagIcon, ArrowRight, ShieldCheck, Link, Check } from 'lucide-react';
 
 interface TaskDetailModalProps {
   task: Task | null;
@@ -13,8 +13,43 @@ interface TaskDetailModalProps {
 export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, statuses, logs, onClose, onTagClick }) => {
   if (!task) return null;
 
+  const [copied, setCopied] = useState(false);
   const currentStatus = statuses.find((s) => s.id === task.status_id);
   const taskLogs = logs.filter((l) => l.task_id === task.id);
+
+  const handleCopyLink = async () => {
+    try {
+      const url = new URL(window.location.origin + window.location.pathname);
+      url.searchParams.set('task_id', task.id);
+      if (task.session_id) {
+        url.searchParams.set('session_id', task.session_id);
+      }
+      const linkText = url.toString();
+      let didCopy = false;
+      if (navigator.clipboard) {
+        try {
+          await navigator.clipboard.writeText(linkText);
+          didCopy = true;
+        } catch (_) { }
+      }
+      if (!didCopy) {
+        const textarea = document.createElement('textarea');
+        textarea.value = linkText;
+        textarea.style.position = 'fixed';
+        textarea.style.left = '-999999px';
+        textarea.style.top = '-999999px';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy task link:', err);
+    }
+  };
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -23,6 +58,29 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, statuses
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid var(--border-glass)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span className="task-id" style={{ fontSize: '0.9rem' }}>{task.id}</span>
+            <button
+              id="modal-copy-task-link-btn"
+              onClick={handleCopyLink}
+              title={copied ? 'Task link copied!' : `Copy direct link to ${task.id}`}
+              aria-label={copied ? 'Task link copied' : `Copy direct link to ${task.id}`}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '4px',
+                background: copied ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+                border: copied ? '1px solid var(--accent-emerald)' : '1px solid var(--border-glass)',
+                borderRadius: '6px',
+                padding: '4px 8px',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                color: copied ? 'var(--accent-emerald)' : 'var(--text-muted)',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              {copied ? <Check size={13} color="var(--accent-emerald)" /> : <Link size={13} />}
+            </button>
             <span
               style={{
                 display: 'inline-flex',
@@ -42,6 +100,8 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, statuses
           </div>
 
           <button
+            id="modal-close-btn"
+            aria-label="Close modal"
             onClick={onClose}
             style={{
               background: 'transparent',

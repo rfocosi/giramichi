@@ -68,7 +68,7 @@ test.describe('Giramichi Dashboard E2E Tests', () => {
     await expect(modal).toBeVisible();
 
     // Verify modal close button in header
-    const closeBtn = modal.locator('.modal-content button').first();
+    const closeBtn = modal.locator('#modal-close-btn');
     await expect(closeBtn).toBeVisible();
 
     // Close modal
@@ -182,6 +182,68 @@ test.describe('Giramichi Dashboard E2E Tests', () => {
         await expect(copyIdBtn).toBeEnabled();
       }
     }
+  });
+
+  test('should copy task link from TaskCard on Kanban board', async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']).catch(() => {});
+    const taskCard = page.locator('.task-card').first();
+    await expect(taskCard).toBeVisible();
+
+    const taskId = await taskCard.locator('.task-id').innerText();
+    const copyTaskLinkBtn = taskCard.locator('.task-copy-link-btn');
+    await expect(copyTaskLinkBtn).toBeVisible();
+
+    // Click copy task link
+    await copyTaskLinkBtn.click();
+    await expect(copyTaskLinkBtn).toHaveAttribute('title', 'Task link copied!');
+
+    // Verify clicking copy link did not open the modal
+    const modal = page.locator('.modal-overlay');
+    await expect(modal).not.toBeVisible();
+  });
+
+  test('should copy task link from TaskDetailModal header and close modal', async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']).catch(() => {});
+    const taskCard = page.locator('.task-card').first();
+    await expect(taskCard).toBeVisible();
+    const taskId = await taskCard.locator('.task-id').innerText();
+
+    // Open modal
+    await taskCard.click();
+    const modal = page.locator('.modal-overlay');
+    await expect(modal).toBeVisible();
+
+    // Verify task_id is in URL
+    await expect(page).toHaveURL(new RegExp(`task_id=${taskId}`));
+
+    // Copy link from modal
+    const modalCopyBtn = page.locator('#modal-copy-task-link-btn');
+    await expect(modalCopyBtn).toBeVisible();
+    await modalCopyBtn.click();
+    await expect(modalCopyBtn).toHaveAttribute('title', 'Task link copied!');
+
+    // Close modal
+    const closeBtn = modal.locator('#modal-close-btn');
+    await closeBtn.click();
+    await expect(modal).not.toBeVisible();
+
+    // Verify task_id removed from URL
+    await expect(page).not.toHaveURL(/task_id=/);
+  });
+
+  test('should open task modal directly when navigating with ?task_id= query param', async ({ page }) => {
+    // Get first task ID
+    const taskCard = page.locator('.task-card').first();
+    await expect(taskCard).toBeVisible();
+    const taskId = await taskCard.locator('.task-id').innerText();
+
+    // Navigate directly with ?task_id=
+    await page.goto(`/?task_id=${taskId}`);
+
+    // Modal should be automatically open
+    const modal = page.locator('.modal-overlay');
+    await expect(modal).toBeVisible();
+    await expect(modal.locator('.task-id')).toContainText(taskId);
   });
 });
 
