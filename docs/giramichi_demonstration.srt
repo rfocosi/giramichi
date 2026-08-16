@@ -1,0 +1,135 @@
+1
+00:00:00,100 --> 00:00:04,025
+Welcome to Giramichi — the AI-guided project engine built specifically
+
+2
+00:00:04,037 --> 00:00:05,650
+for autonomous coding agents.
+
+3
+00:00:06,512 --> 00:00:08,875
+Unlike traditional project management tools,
+
+4
+00:00:09,012 --> 00:00:11,412
+Giramichi is completely MCP-native.
+
+5
+00:00:12,275 --> 00:00:15,700
+Humans never manually drag cards or configure workflows.
+
+6
+00:00:16,562 --> 00:00:20,675
+Instead, AI agents orchestrate the entire development lifecycle through
+
+7
+00:00:20,687 --> 00:00:22,912
+standard Model Context Protocol tools,
+
+8
+00:00:23,150 --> 00:00:25,350
+while teams observe progress in real time on a
+
+9
+00:00:25,362 --> 00:00:27,137
+clean glassmorphism dashboard.
+
+10
+00:00:28,100 --> 00:00:30,700
+Whenever an AI agent begins a new objective,
+
+11
+00:00:30,937 --> 00:00:33,487
+it requests a dedicated session to keep track of
+
+12
+00:00:33,500 --> 00:00:34,850
+all development within it.
+
+13
+00:00:35,712 --> 00:00:38,837
+This session acts as an isolated project workspace where
+
+14
+00:00:38,850 --> 00:00:40,562
+the agent organizes tasks,
+
+15
+00:00:40,737 --> 00:00:43,950
+logs telemetry, and records its technical decisions.
+
+16
+00:00:44,812 --> 00:00:48,562
+Under this session, the agent automatically configures custom workflow
+
+17
+00:00:48,575 --> 00:00:52,062
+stages tailored specifically to the project development pipeline.
+
+18
+00:00:53,100 --> 00:00:56,237
+As the AI agent breaks down requirements into actionable
+
+19
+00:00:56,250 --> 00:01:00,287
+steps, it creates structured tasks with precise decimal execution
+
+20
+00:01:00,300 --> 00:01:02,775
+ordering. As work proceeds,
+
+21
+00:01:02,887 --> 00:01:05,962
+the agent advances task cards through workflow stages,
+
+22
+00:01:06,200 --> 00:01:09,337
+documenting its technical rationale for every transition.
+
+23
+00:01:10,200 --> 00:01:13,150
+Every state update is instantly broadcast to the dashboard
+
+24
+00:01:13,162 --> 00:01:16,550
+via real-time Server-Sent Events with zero manual intervention.
+
+25
+00:01:17,600 --> 00:01:20,862
+Giramichi delivers comprehensive execution observability.
+
+26
+00:01:21,725 --> 00:01:25,112
+With every action, Giramichi monitors token consumption,
+
+27
+00:01:25,312 --> 00:01:28,350
+calculates live inference costs across models like Claude,
+
+28
+00:01:28,500 --> 00:01:33,037
+Gemini, and GPT-4, and visualizes sprint velocity and stage
+
+29
+00:01:33,050 --> 00:01:37,037
+dwell times. Every AI decision and status update is
+
+30
+00:01:37,050 --> 00:01:39,662
+permanently preserved in the real-time activity stream.
+
+31
+00:01:40,600 --> 00:01:44,975
+Giramichi unites autonomous AI execution with transparent human oversight,
+
+32
+00:01:45,150 --> 00:01:47,050
+powered entirely through MCP.
+
+33
+00:01:47,912 --> 00:01:49,925
+Empower your AI agents to plan,
+
+34
+00:01:50,087 --> 00:01:52,937
+execute, and deliver with clarity and confidence.

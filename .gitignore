@@ -58,3 +58,4 @@ Thumbs.db
 .agents/
 
 test-results/
+**/demo_video
