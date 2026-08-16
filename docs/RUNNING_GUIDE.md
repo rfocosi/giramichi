@@ -14,13 +14,14 @@ All pre-built production container images are published to the GitHub Container 
 
 1. [Architecture & Component Overview](#-architecture--component-overview)
 2. [Why is the Standalone MCP Server Optional?](#-why-is-the-standalone-mcp-server-optional)
-3. [Quick Reference: Container Images & Ports](#-quick-reference-container-images--ports)
-4. [Method 1: Running with Docker Run (Direct from GHCR)](#-method-1-running-with-docker-run-direct-from-ghcr)
-5. [Method 2: Running with Docker Compose](#-method-2-running-with-docker-compose)
-6. [Method 3: Running on Kubernetes (K8s)](#-method-3-running-on-kubernetes-k8s)
-7. [Method 4: Running Locally via Node.js / npm](#-method-4-running-locally-via-nodejs--npm)
-8. [Configuration & Environment Variables](#-configuration--environment-variables)
-9. [Health Check & Verification](#-health-check--verification)
+3. [Multi-Database Support (PostgreSQL, MySQL, MSSQL, SQLite)](#-multi-database-support-postgresql-mysql-mssql-sqlite)
+4. [Quick Reference: Container Images & Ports](#-quick-reference-container-images--ports)
+5. [Method 1: Running with Docker Run (Direct from GHCR)](#-method-1-running-with-docker-run-direct-from-ghcr)
+6. [Method 2: Running with Docker Compose](#-method-2-running-with-docker-compose)
+7. [Method 3: Running on Kubernetes (K8s)](#-method-3-running-on-kubernetes-k8s)
+8. [Method 4: Running Locally via Node.js / npm](#-method-4-running-locally-via-nodejs--npm)
+9. [Configuration & Environment Variables](#-configuration--environment-variables)
+10. [Health Check & Verification](#-health-check--verification)
 
 ---
 
@@ -89,6 +90,77 @@ You **do NOT need** to run `giramichi-mcp` for standard deployments. Here is why
 
 ---
 
+## 🗄️ Multi-Database Support (PostgreSQL, MySQL, MSSQL, SQLite)
+
+> 🔔 **Important Reminder**: While Giramichi defaults to zero-configuration embedded SQLite, it is **natively compatible with production-grade relational databases**. You can easily switch the database backend by setting the `DB_TYPE` and `DATABASE_URL` (or discrete host/port/user/password) environment variables.
+
+| Database | `DB_TYPE` Values | Driver / Adapter | Use Case |
+| :--- | :--- | :--- | :--- |
+| **SQLite (Default)** | `sqlite` | `better-sqlite3` (WAL mode) | Local development, single-container instances, embedded desktop workflows. |
+| **PostgreSQL** | `postgres`, `postgresql`, `pg` | `pg` (Connection Pooling) | Production multi-instance deployments, high-concurrency cloud clusters (AWS RDS, GCP Cloud SQL, Azure Database). |
+| **MySQL / MariaDB** | `mysql`, `mariadb` | `mysql2` | Existing corporate MySQL/MariaDB infrastructure, clustered database environments. |
+| **Microsoft SQL Server** | `mssql`, `sqlserver` | `mssql` / `tedious` | Enterprise Windows/Azure SQL Server ecosystems. |
+
+> ⚡ **Zero-Migration Auto-Provisioning**: When starting Giramichi against any supported database engine, the backend automatically initializes and validates the required schema, tables (`workflows`, `statuses`, `tasks`, `sessions`, `activity_logs`), and seed data if the database is blank.
+
+### Database Connection Configurations
+
+#### 🐘 PostgreSQL Configuration
+```bash
+# Option 1: Connection URL (Recommended)
+DB_TYPE=postgres
+DATABASE_URL=postgres://giramichi:secret_password@postgres-host:5432/giramichi
+
+# Option 2: Discrete Variables
+DB_TYPE=postgres
+DB_HOST=postgres-host
+DB_PORT=5432
+DB_USER=giramichi
+DB_PASSWORD=secret_password
+DB_NAME=giramichi
+DB_SSL=false
+```
+
+#### 🐬 MySQL / MariaDB Configuration
+```bash
+# Option 1: Connection URL
+DB_TYPE=mysql
+DATABASE_URL=mysql://giramichi:secret_password@mysql-host:3306/giramichi
+
+# Option 2: Discrete Variables
+DB_TYPE=mysql
+DB_HOST=mysql-host
+DB_PORT=3306
+DB_USER=giramichi
+DB_PASSWORD=secret_password
+DB_NAME=giramichi
+```
+
+#### 🏢 Microsoft SQL Server Configuration
+```bash
+# Option 1: Connection URL
+DB_TYPE=mssql
+DATABASE_URL=mssql://sa:YourStrongPassword123!@mssql-host:1433/giramichi
+
+# Option 2: Discrete Variables
+DB_TYPE=mssql
+DB_HOST=mssql-host
+DB_PORT=1433
+DB_USER=sa
+DB_PASSWORD=YourStrongPassword123!
+DB_NAME=giramichi
+DB_ENCRYPT=false
+```
+
+#### 🗃️ SQLite Configuration (Default)
+```bash
+DB_TYPE=sqlite
+DB_DIR=data
+DB_FILE=giramichi.db
+```
+
+---
+
 ## 📦 Quick Reference: Container Images & Ports
 
 | Component | GHCR Image | Internal Port | Default Host Port | Purpose |
@@ -116,6 +188,7 @@ docker volume create giramichi-data
 
 ### Step 2: Run the Server (Backend + Embedded MCP)
 
+#### Option A: Running with Default SQLite
 ```bash
 docker run -d \
   --name giramichi-server \
@@ -124,6 +197,22 @@ docker run -d \
   -v giramichi-data:/app/data \
   -e NODE_ENV=production \
   -e PORT=3001 \
+  -e DB_TYPE=sqlite \
+  -e GIRAMICHI_SESSION_HISTORY_DISPLAY_PERIOD=3D \
+  --restart unless-stopped \
+  ghcr.io/rfocosi/giramichi-server:latest
+```
+
+#### Option B: Running with PostgreSQL / MySQL / MSSQL (No local volume required)
+```bash
+docker run -d \
+  --name giramichi-server \
+  --network giramichi-net \
+  -p 3001:3001 \
+  -e NODE_ENV=production \
+  -e PORT=3001 \
+  -e DB_TYPE=postgres \
+  -e DATABASE_URL=postgres://giramichi:secret_password@postgres-host:5432/giramichi \
   -e GIRAMICHI_SESSION_HISTORY_DISPLAY_PERIOD=3D \
   --restart unless-stopped \
   ghcr.io/rfocosi/giramichi-server:latest
@@ -309,6 +398,57 @@ services:
       - giramichi-server
       - redis
     restart: unless-stopped
+
+---
+
+### 3. Production Stack with PostgreSQL Database
+
+If you prefer running a dedicated PostgreSQL container rather than SQLite:
+
+```yaml
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: giramichi-postgres
+    environment:
+      POSTGRES_DB: giramichi
+      POSTGRES_USER: giramichi
+      POSTGRES_PASSWORD: secret_password
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+
+  giramichi-server:
+    image: ghcr.io/rfocosi/giramichi-server:latest
+    container_name: giramichi-server
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - DB_TYPE=postgres
+      - DATABASE_URL=postgres://giramichi:secret_password@postgres:5432/giramichi
+      - GIRAMICHI_SESSION_HISTORY_DISPLAY_PERIOD=3D
+    ports:
+      - "3001:3001"
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  giramichi-frontend:
+    image: ghcr.io/rfocosi/giramichi-frontend:latest
+    container_name: giramichi-frontend
+    environment:
+      - GIRAMICHI_API_URL=http://localhost:3001
+    ports:
+      - "3000:80"
+    depends_on:
+      - giramichi-server
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+```
 ```
 
 ---
@@ -626,8 +766,17 @@ npm run mcp:http
 | `GIRAMICHI_API_URL` | `frontend` | *(Empty)* | Backend API URL reachable by the client browser (e.g. `http://localhost:3001`). |
 | `VITE_DEMO` / `DEMO` | `frontend` | `false` | When `true`, enables mock demo mode in UI. |
 | `GIRAMICHI_SESSION_HISTORY_DISPLAY_PERIOD` | `server` | `3D` | Active session filter window (`1H`, `3D`, `2W`, `1Y`, or `all`). |
-| `DB_TYPE` | `server`, `mcp` | `sqlite` | Database engine (`sqlite`, `postgres`, `mysql`, `mssql`). |
-| `DATABASE_URL` | `server`, `mcp` | *(None)* | Connection string for Postgres / MySQL / MSSQL. |
+| `DB_TYPE` | `server`, `mcp` | `sqlite` | Database engine (`sqlite`, `postgres` / `postgresql`, `mysql` / `mariadb`, `mssql` / `sqlserver`). |
+| `DATABASE_URL` | `server`, `mcp` | *(None)* | Full connection URI (e.g. `postgres://user:pass@host:5432/db`, `mysql://...`, `mssql://...`). |
+| `DB_HOST` | `server`, `mcp` | `localhost` | Hostname/IP for PostgreSQL, MySQL, or MSSQL. |
+| `DB_PORT` | `server`, `mcp` | `5432` / `3306` / `1433` | Database port. |
+| `DB_USER` | `server`, `mcp` | *(None)* | Database username. |
+| `DB_PASSWORD` | `server`, `mcp` | *(None)* | Database password. |
+| `DB_NAME` | `server`, `mcp` | `giramichi` | Database name. |
+| `DB_SSL` | `server`, `mcp` | `false` | Set to `true` to enable SSL for PostgreSQL or MySQL. |
+| `DB_ENCRYPT` | `server`, `mcp` | `false` | Set to `true` to enable TLS encryption for MSSQL / Azure SQL. |
+| `DB_DIR` | `server`, `mcp` | `data` | Directory for SQLite database file when `DB_TYPE=sqlite`. |
+| `DB_FILE` | `server`, `mcp` | `giramichi.db` | Filename for SQLite database when `DB_TYPE=sqlite`. |
 | `MCP_HTTP_PORT` | `mcp` | `3002` | HTTP port for standalone MCP container. |
 | `REDIS_URL` | `server`, `mcp` | *(None)* | Redis connection string for SSE multi-instance clustering. |
 | `AUTH_MODE` | `server` | `disabled` | Authentication mode (`disabled` or `oauth2`). |
