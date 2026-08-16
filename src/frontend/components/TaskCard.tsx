@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Task } from '../../db/db.js';
-import { Clock, Bot, Target } from 'lucide-react';
+import { Clock, Bot, Target, Link, Check } from 'lucide-react';
 
 interface TaskCardProps {
   task: Task;
@@ -10,6 +10,8 @@ interface TaskCardProps {
 }
 
 export const TaskCard: React.FC<TaskCardProps> = ({ task, isNextTask, onClick, onTagClick }) => {
+  const [copied, setCopied] = useState(false);
+
   const getPriorityClass = (priority: Task['priority']) => {
     switch (priority) {
       case 'urgent':
@@ -21,6 +23,41 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, isNextTask, onClick, o
       case 'low':
       default:
         return 'priority-low';
+    }
+  };
+
+  const handleCopyLink = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const url = new URL(window.location.origin + window.location.pathname);
+      url.searchParams.set('task_id', task.id);
+      if (task.session_id) {
+        url.searchParams.set('session_id', task.session_id);
+      }
+      const linkText = url.toString();
+      let didCopy = false;
+      if (navigator.clipboard) {
+        try {
+          await navigator.clipboard.writeText(linkText);
+          didCopy = true;
+        } catch (_) {}
+      }
+      if (!didCopy) {
+        const textarea = document.createElement('textarea');
+        textarea.value = linkText;
+        textarea.style.position = 'fixed';
+        textarea.style.left = '-999999px';
+        textarea.style.top = '-999999px';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy task link:', err);
     }
   };
 
@@ -39,6 +76,27 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, isNextTask, onClick, o
       <div className="task-card-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <span className="task-id">{task.id}</span>
+          <button
+            className="task-copy-link-btn"
+            id={`copy-task-link-${task.id}`}
+            onClick={handleCopyLink}
+            title={copied ? 'Task link copied!' : `Copy direct link to ${task.id}`}
+            aria-label={copied ? 'Task link copied' : `Copy direct link to ${task.id}`}
+            style={{
+              background: copied ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+              border: copied ? '1px solid var(--accent-emerald)' : '1px solid var(--border-glass)',
+              borderRadius: '6px',
+              padding: '3px 5px',
+              color: copied ? 'var(--accent-emerald)' : 'var(--text-dim)',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            {copied ? <Check size={12} color="var(--accent-emerald)" /> : <Link size={12} />}
+          </button>
           <span
             style={{
               fontSize: '0.7rem',

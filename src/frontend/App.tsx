@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Workflow, Task, ActivityLog, Session } from '../db/db.js';
 import { WorkflowHeader } from './components/WorkflowHeader.js';
 import { KanbanBoard } from './components/KanbanBoard.js';
@@ -9,9 +9,9 @@ import { ReportsView } from './components/ReportsView.js';
 import { Footer } from './components/Footer.js';
 import { fetchConfig, buildApiUrl, isDemoMode } from './config.js';
 
-const parseRouteState = (): { sessionId: string; view: 'board' | 'reports' } => {
+const parseRouteState = (): { sessionId: string; view: 'board' | 'reports'; taskId: string | null } => {
   if (typeof window === 'undefined') {
-    return { sessionId: 'all', view: 'board' };
+    return { sessionId: 'all', view: 'board', taskId: null };
   }
 
   const params = new URLSearchParams(window.location.search);
@@ -40,14 +40,27 @@ const parseRouteState = (): { sessionId: string; view: 'board' | 'reports' } => 
     }
   }
 
+  // Determine task ID
+  let taskId = params.get('task_id') || params.get('task') || params.get('taskId') || null;
+  if (!taskId) {
+    const taskMatch = window.location.pathname.match(/\/tasks\/([^\/]+)/i);
+    if (taskMatch && taskMatch[1]) {
+      taskId = decodeURIComponent(taskMatch[1]);
+    }
+  }
+
   return {
     sessionId: sessionId || 'all',
     view,
+    taskId,
   };
 };
 
 export const App: React.FC = () => {
   const initialRoute = parseRouteState();
+  const isInitialMount = useRef(true);
+  const pendingTaskIdRef = useRef<string | null>(initialRoute.taskId);
+
   const [workflow, setWorkflow] = useState<Workflow | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [logs, setLogs] = useState<ActivityLog[]>([]);
@@ -61,8 +74,30 @@ export const App: React.FC = () => {
   const [activeView, setActiveView] = useState<'board' | 'reports'>(initialRoute.view);
   const [syncStatus, setSyncStatus] = useState<'connected' | 'connecting' | 'disconnected'>('connecting');
 
-  // Keep URL query parameters in sync with selected session and active view
+  const loadTaskById = async (taskId: string, currentTasks: Task[] = tasks) => {
+    const found = currentTasks.find((t) => t.id === taskId);
+    if (found) {
+      setSelectedTask(found);
+      return;
+    }
+    try {
+      const res = await fetch(buildApiUrl(`/api/tasks/${encodeURIComponent(taskId)}`));
+      const data = await res.json();
+      if (data.success && data.task) {
+        setSelectedTask(data.task);
+      }
+    } catch (err) {
+      console.error('Failed to fetch deep linked task:', err);
+    }
+  };
+
+  // Keep URL query parameters in sync with selected session, active view, and selected task
   useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+
     if (typeof window !== 'undefined') {
       const url = new URL(window.location.href);
 
@@ -82,9 +117,18 @@ export const App: React.FC = () => {
         url.searchParams.delete('tab');
       }
 
+      // Sync task_id
+      if (selectedTask) {
+        url.searchParams.set('task_id', selectedTask.id);
+      } else {
+        url.searchParams.delete('task_id');
+        url.searchParams.delete('task');
+        url.searchParams.delete('taskId');
+      }
+
       window.history.replaceState({}, '', url.toString());
     }
-  }, [selectedSessionId, activeView]);
+  }, [selectedSessionId, activeView, selectedTask]);
 
   // Handle browser back/forward navigation
   useEffect(() => {
@@ -92,10 +136,15 @@ export const App: React.FC = () => {
       const route = parseRouteState();
       setSelectedSessionId(route.sessionId);
       setActiveView(route.view);
+      if (route.taskId) {
+        loadTaskById(route.taskId);
+      } else {
+        setSelectedTask(null);
+      }
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
+  }, [tasks]);
 
   // Tag Filtering State
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -126,6 +175,13 @@ export const App: React.FC = () => {
         setLogs(data.logs);
         if (data.sessions) {
           setSessionsList(data.sessions);
+        }
+
+        // Open deep linked task if specified in URL or pending ref
+        const taskIdToOpen = pendingTaskIdRef.current || parseRouteState().taskId;
+        if (taskIdToOpen) {
+          pendingTaskIdRef.current = null;
+          loadTaskById(taskIdToOpen, data.tasks);
         }
       }
     } catch (err) {
