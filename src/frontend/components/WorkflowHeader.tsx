@@ -43,24 +43,20 @@ export const WorkflowHeader: React.FC<WorkflowHeaderProps> = ({
   return (
     <header style={{ marginBottom: '20px' }}>
       {/* Row 1: Brand Title & Logo */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px' }}>
-        <div
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+        <img
+          src="/giramichi.png"
+          alt="Giramichi Logo"
           style={{
-            width: '38px',
-            height: '38px',
-            borderRadius: '10px',
-            background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 0 16px rgba(99, 102, 241, 0.4)',
+            height: '34px',
+            width: 'auto',
+            objectFit: 'contain',
             flexShrink: 0,
+            display: 'block',
           }}
-        >
-          <Sparkles size={20} color="#ffffff" />
-        </div>
-        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.02em', margin: 0, whiteSpace: 'nowrap' }}>
-          Giramichi <span style={{ fontSize: '0.95rem', fontWeight: 400, color: 'var(--accent-indigo)', marginLeft: '4px' }}>煌道</span>
+        />
+        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.02em', margin: 0, lineHeight: 1, display: 'flex', alignItems: 'center', whiteSpace: 'nowrap' }}>
+          Giramichi <span style={{ fontSize: '0.95rem', fontWeight: 400, color: 'var(--accent-indigo)', marginLeft: '6px' }}>煌<br />道</span>
         </h1>
       </div>
 
@@ -69,20 +65,20 @@ export const WorkflowHeader: React.FC<WorkflowHeaderProps> = ({
         <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: 0 }}>
           Autonomous Execution Engine — Multi-Agent Session Pipeline & Real-Time Human Oversight
         </p>
-        <div 
+        <div
           style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', flexShrink: 0 }}
           title={
             syncStatus === 'connected'
               ? 'Connected to server SSE real-time stream'
               : syncStatus === 'connecting'
-              ? 'Attempting to establish connection with server...'
-              : 'Disconnected from server stream (offline)'
+                ? 'Attempting to establish connection with server...'
+                : 'Disconnected from server stream (offline)'
           }
         >
           <span className={`pulse-dot ${syncStatus === 'connecting' ? 'warning' : syncStatus === 'disconnected' ? 'error' : ''}`}></span>
-          <span style={{ 
-            color: syncStatus === 'connected' ? 'var(--accent-emerald)' : syncStatus === 'connecting' ? 'var(--accent-amber)' : 'var(--accent-rose)', 
-            fontWeight: 500 
+          <span style={{
+            color: syncStatus === 'connected' ? 'var(--accent-emerald)' : syncStatus === 'connecting' ? 'var(--accent-amber)' : 'var(--accent-rose)',
+            fontWeight: 500
           }}>
             {syncStatus === 'connected' ? 'Live Realtime Sync' : syncStatus === 'connecting' ? 'Reconnecting...' : 'Sync Offline'}
           </span>
