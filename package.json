@@ -11,11 +11,11 @@
     "mcp": "tsx src/mcp/mcpServer.ts",
     "mcp:http": "tsx src/mcp/httpMcpServer.ts",
     "auth:device": "tsx scripts/demo_device_flow.ts",
-    "test:e2e": "playwright test tests/e2e",
-    "test:api": "playwright test tests/api",
-    "test:mcp": "playwright test tests/api/mcp-server.spec.ts",
-    "test:unit": "playwright test tests/unit",
-    "test:all": "playwright test"
+    "test:e2e": "DB_FILE=giramichi-test.db playwright test tests/e2e",
+    "test:api": "DB_FILE=giramichi-test.db playwright test tests/api",
+    "test:mcp": "DB_FILE=giramichi-test.db playwright test tests/api/mcp-server.spec.ts",
+    "test:unit": "DB_FILE=giramichi-test.db playwright test tests/unit",
+    "test:all": "DB_FILE=giramichi-test.db playwright test"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.6.0",

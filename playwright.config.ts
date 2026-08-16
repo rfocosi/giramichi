@@ -7,6 +7,7 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
   reporter: 'list',
+  globalTeardown: './tests/global-teardown.ts',
   use: {
     baseURL: process.env.BASE_URL || 'http://localhost:3000',
     trace: 'on-first-retry',
@@ -20,6 +21,7 @@ export default defineConfig({
       timeout: 120 * 1000,
       env: {
         GIRAMICHI_API_URL: 'http://localhost:3001',
+        DB_FILE: 'giramichi-test.db',
       },
     },
     {
