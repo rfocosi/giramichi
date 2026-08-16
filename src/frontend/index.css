@@ -99,6 +99,17 @@ body {
   display: inline-block;
 }
 
+.pulse-dot.warning {
+  background-color: var(--accent-amber);
+  box-shadow: 0 0 8px var(--accent-amber);
+}
+
+.pulse-dot.error {
+  background-color: var(--accent-rose);
+  box-shadow: 0 0 8px var(--accent-rose);
+  animation: none;
+}
+
 .ai-badge {
   display: inline-flex;
   align-items: center;

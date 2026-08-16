@@ -20,6 +20,7 @@ export const App: React.FC = () => {
   const [isActivityDrawerOpen, setIsActivityDrawerOpen] = useState(false);
   const [configError, setConfigError] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<'board' | 'reports'>('board');
+  const [syncStatus, setSyncStatus] = useState<'connected' | 'connecting' | 'disconnected'>('connecting');
 
   // Tag Filtering State
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -69,9 +70,15 @@ export const App: React.FC = () => {
         fetchSessions();
 
         // Subscribe to SSE stream for real-time live sync
+        setSyncStatus('connecting');
         eventSource = new EventSource(buildApiUrl('/api/events'));
 
+        eventSource.onopen = () => {
+          setSyncStatus('connected');
+        };
+
         eventSource.onmessage = (event) => {
+          setSyncStatus('connected');
           try {
             const payload = JSON.parse(event.data);
             console.log('[SSE Event Received]', payload);
@@ -81,9 +88,19 @@ export const App: React.FC = () => {
             console.error('Failed to parse SSE payload:', err);
           }
         };
+
+        eventSource.onerror = (err) => {
+          console.warn('[SSE Connection Error/Reconnecting]', err);
+          if (eventSource?.readyState === EventSource.CLOSED) {
+            setSyncStatus('disconnected');
+          } else {
+            setSyncStatus('connecting');
+          }
+        };
       } catch (err: any) {
         console.error('Configuration Initialization Error:', err);
         setConfigError(err.message || 'GIRAMICHI_API_URL is not defined');
+        setSyncStatus('disconnected');
         setLoading(false);
       }
     };
@@ -347,6 +364,7 @@ export const App: React.FC = () => {
         logCount={logs.length}
         activeView={activeView}
         onSelectView={(view) => setActiveView(view)}
+        syncStatus={syncStatus}
       />
 
       {activeView === 'board' ? (

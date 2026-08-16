@@ -18,6 +18,7 @@ interface WorkflowHeaderProps {
   isDemo?: boolean;
   activeView?: 'board' | 'reports';
   onSelectView?: (view: 'board' | 'reports') => void;
+  syncStatus?: 'connected' | 'connecting' | 'disconnected';
 }
 
 export const WorkflowHeader: React.FC<WorkflowHeaderProps> = ({
@@ -35,6 +36,7 @@ export const WorkflowHeader: React.FC<WorkflowHeaderProps> = ({
   isDemo,
   activeView = 'board',
   onSelectView,
+  syncStatus = 'connected',
 }) => {
   const showDemoButton = isDemo !== undefined ? isDemo : isDemoMode();
 
@@ -67,9 +69,23 @@ export const WorkflowHeader: React.FC<WorkflowHeaderProps> = ({
         <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: 0 }}>
           Autonomous Execution Engine — Multi-Agent Session Pipeline & Real-Time Human Oversight
         </p>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', flexShrink: 0 }}>
-          <span className="pulse-dot"></span>
-          <span style={{ color: 'var(--accent-emerald)', fontWeight: 500 }}>Live Realtime Sync</span>
+        <div 
+          style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', flexShrink: 0 }}
+          title={
+            syncStatus === 'connected'
+              ? 'Connected to server SSE real-time stream'
+              : syncStatus === 'connecting'
+              ? 'Attempting to establish connection with server...'
+              : 'Disconnected from server stream (offline)'
+          }
+        >
+          <span className={`pulse-dot ${syncStatus === 'connecting' ? 'warning' : syncStatus === 'disconnected' ? 'error' : ''}`}></span>
+          <span style={{ 
+            color: syncStatus === 'connected' ? 'var(--accent-emerald)' : syncStatus === 'connecting' ? 'var(--accent-amber)' : 'var(--accent-rose)', 
+            fontWeight: 500 
+          }}>
+            {syncStatus === 'connected' ? 'Live Realtime Sync' : syncStatus === 'connecting' ? 'Reconnecting...' : 'Sync Offline'}
+          </span>
         </div>
       </div>
 
