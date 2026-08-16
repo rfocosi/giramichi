@@ -184,6 +184,20 @@ test.describe('Giramichi Dashboard E2E Tests', () => {
     }
   });
 
+  test('should redirect to / if session parameter in URL is expired or invalid', async ({ page }) => {
+    const sessionSelect = page.locator('header select');
+    await expect(sessionSelect).toBeVisible();
+
+    // Navigate to dashboard with invalid / expired session ID
+    await page.goto('/?session_id=sess-expired-nonexistent-12345');
+
+    // Should redirect URL by removing session_id query param
+    await expect(page).toHaveURL(/^http:\/\/localhost:[0-9]+\/?$/);
+
+    // Dropdown should be reset to 'all'
+    await expect(sessionSelect).toHaveValue('all');
+  });
+
   test('should copy task link from TaskCard on Kanban board', async ({ page, context }) => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']).catch(() => {});
     const taskCard = page.locator('.task-card').first();

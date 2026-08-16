@@ -156,6 +156,22 @@ export const App: React.FC = () => {
       const data = await res.json();
       if (data.success) {
         setSessionsList(data.sessions);
+        if (selectedSessionId && selectedSessionId !== 'all' && data.sessions) {
+          const isSessionValid = data.sessions.some((s: Session) => s.id === selectedSessionId);
+          if (!isSessionValid) {
+            console.warn(`[Giramichi] Session "${selectedSessionId}" is expired or non-existent. Redirecting to /`);
+            setSelectedSessionId('all');
+            if (typeof window !== 'undefined') {
+              const urlObj = new URL(window.location.href);
+              urlObj.searchParams.delete('session_id');
+              urlObj.searchParams.delete('session');
+              if (urlObj.pathname.includes('/sessions/')) {
+                urlObj.pathname = '/';
+              }
+              window.history.replaceState({}, '', urlObj.pathname + (urlObj.search ? urlObj.search : ''));
+            }
+          }
+        }
       }
     } catch (err) {
       console.error('Error fetching sessions:', err);
@@ -169,12 +185,31 @@ export const App: React.FC = () => {
       const res = await fetch(buildApiUrl(url));
       const data = await res.json();
       if (data.success) {
+        if (data.sessions) {
+          setSessionsList(data.sessions);
+          if (sessId && sessId !== 'all') {
+            const isSessionValid = data.sessions.some((s: Session) => s.id === sessId);
+            if (!isSessionValid) {
+              console.warn(`[Giramichi] Session "${sessId}" is expired or non-existent. Redirecting to /`);
+              setSelectedSessionId('all');
+              if (typeof window !== 'undefined') {
+                const urlObj = new URL(window.location.href);
+                urlObj.searchParams.delete('session_id');
+                urlObj.searchParams.delete('session');
+                if (urlObj.pathname.includes('/sessions/')) {
+                  urlObj.pathname = '/';
+                }
+                window.history.replaceState({}, '', urlObj.pathname + (urlObj.search ? urlObj.search : ''));
+              }
+              fetchBoard('all');
+              return;
+            }
+          }
+        }
+
         setWorkflow(data.workflow);
         setTasks(data.tasks);
         setLogs(data.logs);
-        if (data.sessions) {
-          setSessionsList(data.sessions);
-        }
 
         // Open deep linked task if specified in URL or pending ref
         const taskIdToOpen = pendingTaskIdRef.current || parseRouteState().taskId;
