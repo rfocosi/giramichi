@@ -774,7 +774,7 @@ All available environment variables are organized below by domain. You can also 
 | :--- | :--- | :---: | :--- |
 | `GIRAMICHI_API_URL` | `frontend` | *(Empty)* | Backend API URL reachable by the client browser (e.g. `http://localhost:3001`). Injected at container startup. |
 | `VITE_DEMO` / `DEMO` | `frontend` | `false` | When `true`, enables mock demo mode in UI. |
-| `GIRAMICHI_VERSION` / `VITE_APP_VERSION` | `frontend` | `0.3.0` | Injects application version tag into the dashboard header. |
+| `GIRAMICHI_VERSION` / `VITE_APP_VERSION` | `frontend` | `PKG VERSION` | Injects application version tag into the dashboard header. |
 
 ### 3. Database Backend Options
 | Variable | Target Component | Default | Description |
