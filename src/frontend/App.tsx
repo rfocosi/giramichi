@@ -9,12 +9,20 @@ import { ReportsView } from './components/ReportsView.js';
 import { Footer } from './components/Footer.js';
 import { fetchConfig, buildApiUrl, isDemoMode } from './config.js';
 
+const getInitialSessionId = (): string => {
+  if (typeof window !== 'undefined') {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('session_id') || params.get('session') || 'all';
+  }
+  return 'all';
+};
+
 export const App: React.FC = () => {
   const [workflow, setWorkflow] = useState<Workflow | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [sessionsList, setSessionsList] = useState<Session[]>([]);
-  const [selectedSessionId, setSelectedSessionId] = useState<string>('all');
+  const [selectedSessionId, setSelectedSessionId] = useState<string>(getInitialSessionId);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isSimulating, setIsSimulating] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -22,6 +30,31 @@ export const App: React.FC = () => {
   const [configError, setConfigError] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<'board' | 'reports'>('board');
   const [syncStatus, setSyncStatus] = useState<'connected' | 'connecting' | 'disconnected'>('connecting');
+
+  // Keep URL query parameter in sync with selected session
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      if (selectedSessionId && selectedSessionId !== 'all') {
+        url.searchParams.set('session_id', selectedSessionId);
+      } else {
+        url.searchParams.delete('session_id');
+        url.searchParams.delete('session');
+      }
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, [selectedSessionId]);
+
+  // Handle browser back/forward navigation
+  useEffect(() => {
+    const handlePopState = () => {
+      const params = new URLSearchParams(window.location.search);
+      const sessId = params.get('session_id') || params.get('session') || 'all';
+      setSelectedSessionId(sessId);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   // Tag Filtering State
   const [selectedTags, setSelectedTags] = useState<string[]>([]);

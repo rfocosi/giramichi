@@ -111,5 +111,74 @@ test.describe('Giramichi Dashboard E2E Tests', () => {
     await expect(serverPill).toContainText('Server');
     await expect(serverPill).toContainText(/v\d+\.\d+\.\d+/);
   });
+
+  test('should render copy session ID and copy session link buttons', async ({ page }) => {
+    const copyIdBtn = page.locator('#copy-session-id-btn');
+    const copyLinkBtn = page.locator('#copy-session-link-btn');
+
+    await expect(copyIdBtn).toBeVisible();
+    await expect(copyLinkBtn).toBeVisible();
+    await expect(copyIdBtn).toContainText('Copy ID');
+    await expect(copyLinkBtn).toContainText('Copy Link');
+
+    // On default 'all' view, Copy ID is disabled
+    await expect(copyIdBtn).toBeDisabled();
+  });
+
+  test('should enable Copy ID when a session is selected and update URL', async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']).catch(() => {});
+    const sessionSelect = page.locator('header select');
+    await expect(sessionSelect).toBeVisible();
+
+    const options = sessionSelect.locator('option');
+    const optionCount = await options.count();
+
+    if (optionCount > 1) {
+      // Select the first real session option (index 1)
+      const secondOptionValue = await options.nth(1).getAttribute('value');
+      if (secondOptionValue && secondOptionValue !== 'all') {
+        await sessionSelect.selectOption(secondOptionValue);
+
+        // Verify URL updated with session_id query param
+        await expect(page).toHaveURL(new RegExp(`session_id=${secondOptionValue}`));
+
+        // Copy ID button should now be enabled
+        const copyIdBtn = page.locator('#copy-session-id-btn');
+        await expect(copyIdBtn).toBeEnabled();
+
+        // Click Copy ID and check feedback
+        await copyIdBtn.click();
+        await expect(copyIdBtn).toContainText('Copied ID');
+
+        // Click Copy Link and check feedback
+        const copyLinkBtn = page.locator('#copy-session-link-btn');
+        await copyLinkBtn.click();
+        await expect(copyLinkBtn).toContainText('Copied Link');
+      }
+    }
+  });
+
+  test('should restore session from URL query parameter on page load', async ({ page }) => {
+    const sessionSelect = page.locator('header select');
+    await expect(sessionSelect).toBeVisible();
+
+    const options = sessionSelect.locator('option');
+    const optionCount = await options.count();
+
+    if (optionCount > 1) {
+      const targetSessionId = await options.nth(1).getAttribute('value');
+      if (targetSessionId && targetSessionId !== 'all') {
+        // Navigate directly with query parameter
+        await page.goto(`/?session_id=${targetSessionId}`);
+
+        // Verify select dropdown matches the URL query parameter
+        await expect(sessionSelect).toHaveValue(targetSessionId);
+
+        // Copy ID button should be enabled
+        const copyIdBtn = page.locator('#copy-session-id-btn');
+        await expect(copyIdBtn).toBeEnabled();
+      }
+    }
+  });
 });
 
