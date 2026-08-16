@@ -128,4 +128,50 @@ test.describe('SQLite Database Adapter Unit Tests', () => {
     expect(activeSessionsFiltered.map((s) => s.id)).toContain(recentSession.id);
     expect(activeSessionsFiltered.map((s) => s.id)).not.toContain(oldSession.id);
   });
+
+  test('should filter tasks and activity logs based on session display period when querying all sessions', async () => {
+    // 1. Create a recent session and task
+    const recentSession = await adapter.createSession('Recent Task Session', 'Recent desc');
+    const recentTask = await adapter.createTask('Recent Task', 'Recent task desc', 'waiting', 'high', ['tag-recent'], {}, recentSession.id, 1.0);
+    await adapter.logActivity({
+      session_id: recentSession.id,
+      task_id: recentTask.id,
+      action_type: 'TASK_CREATED',
+      details: 'Created recent task',
+    });
+
+    // 2. Create an old session and task, backdating session updated_at to 10 days ago
+    const oldSession = await adapter.createSession('Old Task Session', 'Old desc');
+    const oldTask = await adapter.createTask('Old Task', 'Old task desc', 'waiting', 'low', ['tag-old'], {}, oldSession.id, 2.0);
+    await adapter.logActivity({
+      session_id: oldSession.id,
+      task_id: oldTask.id,
+      action_type: 'TASK_CREATED',
+      details: 'Created old task',
+    });
+    const tenDaysAgoIso = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString();
+    (adapter as any).db.prepare(`UPDATE sessions SET updated_at = ? WHERE id = ?`).run(tenDaysAgoIso, oldSession.id);
+
+    // 3. getTasks(undefined, 'all') with default 3D period should return only recentTask
+    const defaultTasks = await adapter.getTasks(undefined, 'all');
+    const defaultTaskIds = defaultTasks.map((t) => t.id);
+    expect(defaultTaskIds).toContain(recentTask.id);
+    expect(defaultTaskIds).not.toContain(oldTask.id);
+
+    // 4. getTasks(undefined, 'all', 'all') should return all tasks
+    const allTasks = await adapter.getTasks(undefined, 'all', 'all');
+    const allTaskIds = allTasks.map((t) => t.id);
+    expect(allTaskIds).toContain(recentTask.id);
+    expect(allTaskIds).toContain(oldTask.id);
+
+    // 5. Querying specific old session directly should still return its tasks
+    const specificOldTasks = await adapter.getTasks(undefined, oldSession.id);
+    expect(specificOldTasks.map((t) => t.id)).toContain(oldTask.id);
+
+    // 6. getActivityLogs(50, 'all') with default 3D period should filter out old session logs
+    const logs = await adapter.getActivityLogs(50, 'all');
+    const sessionIdsInLogs = logs.map((l) => l.session_id);
+    expect(sessionIdsInLogs).toContain(recentSession.id);
+    expect(sessionIdsInLogs).not.toContain(oldSession.id);
+  });
 });

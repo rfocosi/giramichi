@@ -395,10 +395,41 @@ export class SqliteAdapter implements IDatabaseAdapter {
   }
 
   // Tasks
-  public async getTasks(workflowId?: string, sessionId?: string): Promise<Task[]> {
+  public async getTasks(workflowId?: string, sessionId?: string, since?: string | Date | null): Promise<Task[]> {
+    let cutoffIso: string | null = null;
+    if (since === undefined) {
+      const cutoff = parseDisplayPeriod();
+      cutoffIso = cutoff ? cutoff.toISOString() : null;
+    } else if (since instanceof Date) {
+      cutoffIso = since.toISOString();
+    } else if (typeof since === 'string' && since.trim().toLowerCase() !== 'all') {
+      const cutoff = parseDisplayPeriod(since);
+      cutoffIso = cutoff ? cutoff.toISOString() : null;
+    }
+
     let rows: any[];
     if (sessionId && sessionId !== 'all') {
-      rows = this.db.prepare(`SELECT * FROM tasks WHERE session_id = ? ORDER BY "order" ASC, created_at ASC`).all(sessionId) as any[];
+      if (workflowId) {
+        rows = this.db.prepare(`SELECT * FROM tasks WHERE session_id = ? AND workflow_id = ? ORDER BY "order" ASC, created_at ASC`).all(sessionId, workflowId) as any[];
+      } else {
+        rows = this.db.prepare(`SELECT * FROM tasks WHERE session_id = ? ORDER BY "order" ASC, created_at ASC`).all(sessionId) as any[];
+      }
+    } else if (cutoffIso) {
+      if (workflowId) {
+        rows = this.db.prepare(`
+          SELECT t.* FROM tasks t
+          INNER JOIN sessions s ON t.session_id = s.id
+          WHERE t.workflow_id = ? AND s.updated_at >= ?
+          ORDER BY t."order" ASC, t.created_at ASC
+        `).all(workflowId, cutoffIso) as any[];
+      } else {
+        rows = this.db.prepare(`
+          SELECT t.* FROM tasks t
+          INNER JOIN sessions s ON t.session_id = s.id
+          WHERE s.updated_at >= ?
+          ORDER BY t."order" ASC, t.created_at ASC
+        `).all(cutoffIso) as any[];
+      }
     } else if (workflowId) {
       rows = this.db.prepare(`SELECT * FROM tasks WHERE workflow_id = ? ORDER BY "order" ASC, created_at ASC`).all(workflowId) as any[];
     } else {
@@ -647,10 +678,28 @@ export class SqliteAdapter implements IDatabaseAdapter {
     this.notify('LOG_ADDED', fullLog);
   }
 
-  public async getActivityLogs(limit = 50, sessionId?: string): Promise<ActivityLog[]> {
+  public async getActivityLogs(limit = 50, sessionId?: string, since?: string | Date | null): Promise<ActivityLog[]> {
+    let cutoffIso: string | null = null;
+    if (since === undefined) {
+      const cutoff = parseDisplayPeriod();
+      cutoffIso = cutoff ? cutoff.toISOString() : null;
+    } else if (since instanceof Date) {
+      cutoffIso = since.toISOString();
+    } else if (typeof since === 'string' && since.trim().toLowerCase() !== 'all') {
+      const cutoff = parseDisplayPeriod(since);
+      cutoffIso = cutoff ? cutoff.toISOString() : null;
+    }
+
     let rows: any[];
     if (sessionId && sessionId !== 'all') {
       rows = this.db.prepare(`SELECT * FROM activity_logs WHERE session_id = ? ORDER BY timestamp DESC LIMIT ?`).all(sessionId, limit) as any[];
+    } else if (cutoffIso) {
+      rows = this.db.prepare(`
+        SELECT a.* FROM activity_logs a
+        LEFT JOIN sessions s ON a.session_id = s.id
+        WHERE a.session_id IS NULL OR s.updated_at >= ?
+        ORDER BY a.timestamp DESC LIMIT ?
+      `).all(cutoffIso, limit) as any[];
     } else {
       rows = this.db.prepare(`SELECT * FROM activity_logs ORDER BY timestamp DESC LIMIT ?`).all(limit) as any[];
     }

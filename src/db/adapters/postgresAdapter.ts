@@ -377,10 +377,41 @@ export class PostgresAdapter implements IDatabaseAdapter {
   }
 
   // Tasks
-  public async getTasks(workflowId?: string, sessionId?: string): Promise<Task[]> {
+  public async getTasks(workflowId?: string, sessionId?: string, since?: string | Date | null): Promise<Task[]> {
+    let cutoffIso: string | null = null;
+    if (since === undefined) {
+      const cutoff = parseDisplayPeriod();
+      cutoffIso = cutoff ? cutoff.toISOString() : null;
+    } else if (since instanceof Date) {
+      cutoffIso = since.toISOString();
+    } else if (typeof since === 'string' && since.trim().toLowerCase() !== 'all') {
+      const cutoff = parseDisplayPeriod(since);
+      cutoffIso = cutoff ? cutoff.toISOString() : null;
+    }
+
     let res: pg.QueryResult;
     if (sessionId && sessionId !== 'all') {
-      res = await this.pool.query(`SELECT * FROM tasks WHERE session_id = $1 ORDER BY "order" ASC, created_at ASC`, [sessionId]);
+      if (workflowId) {
+        res = await this.pool.query(`SELECT * FROM tasks WHERE session_id = $1 AND workflow_id = $2 ORDER BY "order" ASC, created_at ASC`, [sessionId, workflowId]);
+      } else {
+        res = await this.pool.query(`SELECT * FROM tasks WHERE session_id = $1 ORDER BY "order" ASC, created_at ASC`, [sessionId]);
+      }
+    } else if (cutoffIso) {
+      if (workflowId) {
+        res = await this.pool.query(`
+          SELECT t.* FROM tasks t
+          INNER JOIN sessions s ON t.session_id = s.id
+          WHERE t.workflow_id = $1 AND s.updated_at >= $2
+          ORDER BY t."order" ASC, t.created_at ASC
+        `, [workflowId, cutoffIso]);
+      } else {
+        res = await this.pool.query(`
+          SELECT t.* FROM tasks t
+          INNER JOIN sessions s ON t.session_id = s.id
+          WHERE s.updated_at >= $1
+          ORDER BY t."order" ASC, t.created_at ASC
+        `, [cutoffIso]);
+      }
     } else if (workflowId) {
       res = await this.pool.query(`SELECT * FROM tasks WHERE workflow_id = $1 ORDER BY "order" ASC, created_at ASC`, [workflowId]);
     } else {
@@ -595,10 +626,28 @@ export class PostgresAdapter implements IDatabaseAdapter {
     this.notify('LOG_ADDED', fullLog);
   }
 
-  public async getActivityLogs(limit = 50, sessionId?: string): Promise<ActivityLog[]> {
+  public async getActivityLogs(limit = 50, sessionId?: string, since?: string | Date | null): Promise<ActivityLog[]> {
+    let cutoffIso: string | null = null;
+    if (since === undefined) {
+      const cutoff = parseDisplayPeriod();
+      cutoffIso = cutoff ? cutoff.toISOString() : null;
+    } else if (since instanceof Date) {
+      cutoffIso = since.toISOString();
+    } else if (typeof since === 'string' && since.trim().toLowerCase() !== 'all') {
+      const cutoff = parseDisplayPeriod(since);
+      cutoffIso = cutoff ? cutoff.toISOString() : null;
+    }
+
     let res: pg.QueryResult;
     if (sessionId && sessionId !== 'all') {
       res = await this.pool.query(`SELECT * FROM activity_logs WHERE session_id = $1 ORDER BY timestamp DESC LIMIT $2`, [sessionId, limit]);
+    } else if (cutoffIso) {
+      res = await this.pool.query(`
+        SELECT a.* FROM activity_logs a
+        LEFT JOIN sessions s ON a.session_id = s.id
+        WHERE a.session_id IS NULL OR s.updated_at >= $1
+        ORDER BY a.timestamp DESC LIMIT $2
+      `, [cutoffIso, limit]);
     } else {
       res = await this.pool.query(`SELECT * FROM activity_logs ORDER BY timestamp DESC LIMIT $1`, [limit]);
     }
