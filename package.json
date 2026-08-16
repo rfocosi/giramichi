@@ -1,6 +1,6 @@
 {
   "name": "giramichi",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "Giramichi - AI-Guided Jira Replacement with Multi-Database Support, MCP, and Read-Only Dashboard",
   "type": "module",
   "scripts": {

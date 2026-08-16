@@ -3,11 +3,13 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { toolDefinitions, handleToolCall } from './tools.js';
 
+import pkg from '../../package.json';
+
 export function createMCPServer(): Server {
   const server = new Server(
     {
       name: 'giramichi-mcp-server',
-      version: '1.0.0',
+      version: pkg.version || '0.1.0',
     },
     {
       capabilities: {
