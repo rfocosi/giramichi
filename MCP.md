@@ -292,18 +292,37 @@ Once connected, your AI assistant will have access to 12 native Giramichi MCP to
 
 | Tool | Description | Key Arguments |
 | :--- | :--- | :--- |
-| `giramichi_create_session` | Create a new agent session. | `name`, `description`, `agent_id` |
-| `giramichi_list_sessions` | List all sessions. | `status` (optional filter) |
-| `giramichi_get_session` | Get details of a specific session. | `session_id` |
-| `giramichi_close_session` | Close an active session. | `session_id` |
+| `giramichi_create_session` | Create a new agent execution session for organizing tasks and metrics. | `name`, `description`, `agent_id`, `workflow_id` |
+| `giramichi_list_sessions` | List active, completed, or archived sessions. | `status` (`active`, `completed`, `archived`) |
+| `giramichi_get_session` | Get details, task execution breakdown, next task to implement, and logs for a session. | `session_id` |
+| `giramichi_close_session` | Close or archive an active session. | `session_id`, `status` (`completed`, `archived`) |
 | `giramichi_create_workflow` | Create a custom workflow lifecycle with status columns and set it active. | `name`, `description`, `statuses` (array of `{ id, name, color, order, description }`) |
 | `giramichi_set_active_workflow` | Switch active workflow by ID. | `workflow_id` |
-| `giramichi_create_task` | Create a task card on the Kanban board. | `title`, `description`, `status_id`, `priority` (`low`/`medium`/`high`/`urgent`), `tags` |
-| `giramichi_batch_create_tasks` | Atomically create multiple task cards at once. | `tasks` (array of task objects) |
-| `giramichi_move_task` | Move a task to a new status stage and record decision rationale. | `task_id`, `new_status_id`, `reason` |
-| `giramichi_update_task` | Edit title, description, priority, or tags of an existing task. | `task_id`, `title`, `description`, `priority`, `tags` |
-| `giramichi_get_board` | Retrieve current active workflow, all status columns, tasks, and recent activity logs. | *(none)* |
-| `giramichi_get_activity_log` | Retrieve AI transition audit log history. | `limit` (default: 50) |
+| `giramichi_create_task` | Create a task card on the Kanban board with decimal ordering and session grouping. | `title`, `description`, `status_id`, `priority` (`low`/`medium`/`high`/`urgent`), `order`, `tags`, `session_id`, `metrics` |
+| `giramichi_batch_create_tasks` | Atomically create multiple task cards at once with decimal order indices. | `tasks` (array of task objects), `session_id` |
+| `giramichi_move_task` | Move a task to a new status stage, record decision rationale, and record telemetry. | `task_id`, `new_status_id`, `reason`, `metrics` |
+| `giramichi_update_task` | Edit title, description, priority, order position, tags, or metrics of an existing task. | `task_id`, `title`, `description`, `priority`, `order`, `tags`, `metrics` |
+| `giramichi_get_board` | Retrieve current active workflow, status columns, tasks, logs, and next task to implement. | `session_id` (optional filter, default: active session) |
+| `giramichi_get_activity_log` | Retrieve AI transition audit log history. | `limit` (default: 50), `session_id` |
+
+### 📊 Telemetry & LLM Observability Payload
+
+When creating, updating, or moving tasks, AI agents can optionally supply execution telemetry via the `metrics` object:
+
+```json
+{
+  "metrics": {
+    "model": "claude-3-5-sonnet-20241022",
+    "prompt_tokens": 1250,
+    "completion_tokens": 340,
+    "cached_tokens": 800,
+    "duration_ms": 1420,
+    "cost_usd": 0.0089
+  }
+}
+```
+
+> 💡 **Auto-Derivation**: If `metrics` is omitted by an agent, Giramichi's backend automatically infers token consumption from payload sizes and applies the active pricing matrix, ensuring comprehensive observability in the Executive Analytics & Reports dashboard.
 
 ---
 
