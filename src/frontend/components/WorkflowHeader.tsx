@@ -251,11 +251,11 @@ export const WorkflowHeader: React.FC<WorkflowHeaderProps> = ({
                 ? 'Session ID copied!'
                 : `Copy Session ID (${selectedSessionId})`
             }
-            aria-label="Copy Session ID"
+            aria-label={copiedId ? 'Session ID copied' : 'Copy Session ID'}
             style={{
-              display: 'flex',
+              display: 'inline-flex',
               alignItems: 'center',
-              gap: '5px',
+              justifyContent: 'center',
               background: copiedId
                 ? 'rgba(16, 185, 129, 0.15)'
                 : 'rgba(255, 255, 255, 0.05)',
@@ -268,7 +268,7 @@ export const WorkflowHeader: React.FC<WorkflowHeaderProps> = ({
                 : selectedSessionId === 'all'
                 ? 'var(--text-dim)'
                 : 'var(--text-main)',
-              padding: '6px 10px',
+              padding: '7px 9px',
               fontSize: '0.8rem',
               fontWeight: 600,
               cursor: selectedSessionId === 'all' ? 'not-allowed' : 'pointer',
@@ -276,8 +276,7 @@ export const WorkflowHeader: React.FC<WorkflowHeaderProps> = ({
               transition: 'all 0.2s ease',
             }}
           >
-            {copiedId ? <Check size={14} color="var(--accent-emerald)" /> : <Copy size={14} />}
-            <span>{copiedId ? 'Copied ID' : 'Copy ID'}</span>
+            {copiedId ? <Check size={15} color="var(--accent-emerald)" /> : <Copy size={15} />}
           </button>
 
           {/* Copy Session Link Button */}
@@ -291,11 +290,11 @@ export const WorkflowHeader: React.FC<WorkflowHeaderProps> = ({
                 ? 'Copy link to dashboard'
                 : `Copy link to session (${selectedSessionId})`
             }
-            aria-label="Copy Session Link"
+            aria-label={copiedLink ? 'Session link copied' : 'Copy Session Link'}
             style={{
-              display: 'flex',
+              display: 'inline-flex',
               alignItems: 'center',
-              gap: '5px',
+              justifyContent: 'center',
               background: copiedLink
                 ? 'rgba(16, 185, 129, 0.15)'
                 : 'rgba(255, 255, 255, 0.05)',
@@ -304,15 +303,14 @@ export const WorkflowHeader: React.FC<WorkflowHeaderProps> = ({
                 : '1px solid var(--border-glass)',
               borderRadius: '8px',
               color: copiedLink ? 'var(--accent-emerald)' : 'var(--text-main)',
-              padding: '6px 10px',
+              padding: '7px 9px',
               fontSize: '0.8rem',
               fontWeight: 600,
               cursor: 'pointer',
               transition: 'all 0.2s ease',
             }}
           >
-            {copiedLink ? <Check size={14} color="var(--accent-emerald)" /> : <Link size={14} />}
-            <span>{copiedLink ? 'Copied Link' : 'Copy Link'}</span>
+            {copiedLink ? <Check size={15} color="var(--accent-emerald)" /> : <Link size={15} />}
           </button>
 
           {/* Read-Only Workflow Badge */}

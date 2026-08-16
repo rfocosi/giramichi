@@ -118,8 +118,8 @@ test.describe('Giramichi Dashboard E2E Tests', () => {
 
     await expect(copyIdBtn).toBeVisible();
     await expect(copyLinkBtn).toBeVisible();
-    await expect(copyIdBtn).toContainText('Copy ID');
-    await expect(copyLinkBtn).toContainText('Copy Link');
+    await expect(copyIdBtn).toHaveAttribute('aria-label', /Copy Session ID/);
+    await expect(copyLinkBtn).toHaveAttribute('aria-label', /Copy Session Link/);
 
     // On default 'all' view, Copy ID is disabled
     await expect(copyIdBtn).toBeDisabled();
@@ -146,14 +146,16 @@ test.describe('Giramichi Dashboard E2E Tests', () => {
         const copyIdBtn = page.locator('#copy-session-id-btn');
         await expect(copyIdBtn).toBeEnabled();
 
-        // Click Copy ID and check feedback
+        // Click Copy ID and check feedback (title & aria-label)
         await copyIdBtn.click();
-        await expect(copyIdBtn).toContainText('Copied ID');
+        await expect(copyIdBtn).toHaveAttribute('title', 'Session ID copied!');
+        await expect(copyIdBtn).toHaveAttribute('aria-label', 'Session ID copied');
 
-        // Click Copy Link and check feedback
+        // Click Copy Link and check feedback (title & aria-label)
         const copyLinkBtn = page.locator('#copy-session-link-btn');
         await copyLinkBtn.click();
-        await expect(copyLinkBtn).toContainText('Copied Link');
+        await expect(copyLinkBtn).toHaveAttribute('title', 'Session link copied!');
+        await expect(copyLinkBtn).toHaveAttribute('aria-label', 'Session link copied');
       }
     }
   });
