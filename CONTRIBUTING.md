@@ -24,10 +24,7 @@ This document provides guidelines, environment setup instructions, and coding st
 
 ## 🤝 Code of Conduct
 
-By participating in this project, you agree to abide by our Code of Conduct:
-- Be respectful and welcoming to all contributors.
-- Collaborate openly, share feedback constructively, and respect differing viewpoints.
-- Focus on building clean, robust, and well-tested software.
+We are committed to fostering a welcoming and respectful community. By participating in this project, you agree to abide by our [Code of Conduct](file:///home/rfocosi/workspace/giramichi/CODE_OF_CONDUCT.md). Please review it to understand our community standards, acceptable behavior, and enforcement guidelines.
 
 ---
 
