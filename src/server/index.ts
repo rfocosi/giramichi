@@ -4,11 +4,14 @@ import { db } from '../db/index.js';
 import { handleToolCall } from '../mcp/tools.js';
 import { createHttpMcpRouter } from '../mcp/httpMcpServer.js';
 import { authenticateAgent } from '../auth/middleware.js';
-import { generateReportsData } from './reportsEngine.js';
+import { generateReportsData, initModelPricing } from './reportsEngine.js';
 import pkg from '../../package.json';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Load dynamic model prices and initialize optional periodic updates
+initModelPricing();
 
 app.use(cors());
 app.use(express.json());
