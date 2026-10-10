@@ -5,6 +5,7 @@ import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { createMCPServer } from './mcpServer.js';
 import { authenticateAgent } from '../auth/middleware.js';
+import { initModelPricing } from '../server/reportsEngine.js';
 
 import {
   initRedisAdapter,
@@ -173,6 +174,8 @@ export function createHttpMcpRouter(): Router {
 
 // Standalone runner for HTTP MCP server
 if (process.argv[1] && (process.argv[1].endsWith('httpMcpServer.ts') || process.argv[1].endsWith('httpMcpServer.js'))) {
+  initModelPricing();
+  
   const app = express();
   app.use(cors());
   app.use(express.json());

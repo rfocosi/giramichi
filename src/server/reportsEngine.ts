@@ -1,3 +1,6 @@
+import os from "os";
+import path from "path";
+import fs from "fs";
 import { Task, ActivityLog, Workflow, Session, Status } from '../db/types.js';
 
 export interface ModelPricing {
@@ -38,6 +41,109 @@ export const DEFAULT_PRICING: ModelPricing = {
   promptCostPerMillion: 2.0,
   completionCostPerMillion: 8.0,
 };
+
+let autoUpdateInterval: NodeJS.Timeout | null = null;
+
+export async function loadModelPricingConfig() {
+  const urlOrPath = process.env.MODEL_PRICES_FILE_PATH;
+  const updateMinutes = parseInt(process.env.MODEL_PRICES_UPDATE_MINUTES || '0', 10);
+  
+  if (!urlOrPath) return;
+
+  try {
+    let data = '';
+    
+    // Apply caching only if the path is a remote URL
+    if (urlOrPath.startsWith('http://') || urlOrPath.startsWith('https://')) {
+      const cachePath = path.resolve(os.tmpdir(), 'giramichi_model_prices_cache.json');
+      let shouldDownload = true;
+      
+      try {
+        const stats = await fs.promises.stat(cachePath);
+        const ageMinutes = (Date.now() - stats.mtimeMs) / (1000 * 60);
+        // Only skip download if updateMinutes > 0 and cache is fresher than updateMinutes
+        if (updateMinutes > 0 && ageMinutes < updateMinutes) {
+          shouldDownload = false;
+        }
+      } catch (err) {
+        // Cache file does not exist, proceed with download
+      }
+
+      if (shouldDownload) {
+        try {
+          const response = await fetch(urlOrPath);
+          if (!response.ok) throw new Error(`Failed to fetch pricing from URL: ${response.statusText}`);
+          data = await response.text();
+          
+          await fs.promises.mkdir(path.dirname(cachePath), { recursive: true });
+          await fs.promises.writeFile(cachePath, data, 'utf8');
+        } catch (fetchErr) {
+          // Fallback to stale cache if fetch fails
+          try {
+            data = await fs.promises.readFile(cachePath, 'utf8');
+            console.warn(`[Giramichi Server] Failed to fetch updated prices. Falling back to stale cache.`);
+          } catch (cacheErr) {
+            throw fetchErr; // Re-throw original error if no fallback is available
+          }
+        }
+      } else {
+        data = await fs.promises.readFile(cachePath, 'utf8');
+      }
+    } else {
+      // Direct local file read
+      data = await fs.promises.readFile(urlOrPath, 'utf8');
+    }
+
+    const parsed = JSON.parse(data);
+    let loadedCount = 0;
+
+    for (const [key, value] of Object.entries(parsed)) {
+      if (key === 'sample_spec') continue;
+      const val = value as any;
+      if (typeof val === 'object' && val !== null) {
+        if (val.input_cost_per_token !== undefined || val.output_cost_per_token !== undefined) {
+           const promptCost = (val.input_cost_per_token || 0) * 1_000_000;
+           const completionCost = (val.output_cost_per_token || 0) * 1_000_000;
+           const cachedReadCost = val.cache_read_input_token_cost !== undefined ? val.cache_read_input_token_cost * 1_000_000 : promptCost * 0.1;
+           const pricingObj = {
+             promptCostPerMillion: promptCost,
+             completionCostPerMillion: completionCost,
+             cachedReadCostPerMillion: cachedReadCost
+           };
+           MODEL_PRICING[key] = pricingObj;
+           if (key.includes('/')) {
+             const shortKey = key.split('/').pop();
+             if (shortKey) {
+               MODEL_PRICING[shortKey] = pricingObj;
+             }
+           }
+           loadedCount++;
+        }
+      }
+    }
+    console.log(`[Giramichi Server] Loaded ${loadedCount} model prices from ${urlOrPath}`);
+  } catch (error) {
+    console.error(`[Giramichi Server] Error loading model prices from ${urlOrPath}:`, error);
+  }
+}
+
+/**
+ * Bootstraps the model pricing lookup on startup and optionally sets up a periodic background refresher.
+ */
+export async function initModelPricing() {
+  await loadModelPricingConfig();
+  
+  const updateMinutes = parseInt(process.env.MODEL_PRICES_UPDATE_MINUTES || '0', 10);
+  if (updateMinutes > 0 && !autoUpdateInterval) {
+    autoUpdateInterval = setInterval(() => {
+      loadModelPricingConfig().catch(err => {
+        console.error('[Giramichi Server] Background model pricing update failed', err);
+      });
+    }, updateMinutes * 60 * 1000);
+    // Unref so the interval doesn't prevent short-lived CLI tools from exiting
+    autoUpdateInterval.unref(); 
+  }
+}
 
 export function calculateCost(
   model: string = 'claude-3-5-sonnet',
