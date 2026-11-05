@@ -75,6 +75,12 @@ export function createHttpMcpRouter(): Router {
   router.get('/sse', async (req: Request, res: Response) => {
     console.log('[Giramichi MCP HTTP] Incoming SSE connection request');
 
+    const maxSse = parseInt(process.env.MAX_SSE_CLIENTS || '200', 10);
+    if (sseTransports.size >= maxSse) {
+      res.status(503).json({ error: 'Too many SSE connections' });
+      return;
+    }
+
     // Explicitly set SSE stream headers to prevent Nginx/Express from closing connection
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -177,7 +183,8 @@ if (process.argv[1] && (process.argv[1].endsWith('httpMcpServer.ts') || process.
   initModelPricing();
   
   const app = express();
-  app.use(cors());
+  const origins = (process.env.CORS_ALLOWED_ORIGINS || '').split(',').map((o) => o.trim()).filter(Boolean);
+  app.use(cors(origins.length > 0 ? { origin: origins } : undefined));
   app.use(express.json());
 
   const router = createHttpMcpRouter();
