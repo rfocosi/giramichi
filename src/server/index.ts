@@ -13,8 +13,17 @@ const PORT = process.env.PORT || 3001;
 // Load dynamic model prices and initialize optional periodic updates
 initModelPricing();
 
-app.use(cors());
+// CORS: restrict to CORS_ALLOWED_ORIGINS (comma-separated) when set; defaults to open for local development
+const corsOrigins = (process.env.CORS_ALLOWED_ORIGINS || '').split(',').map((o) => o.trim()).filter(Boolean);
+app.use(cors(corsOrigins.length > 0 ? { origin: corsOrigins } : undefined));
 app.use(express.json());
+
+// Returns a generic message in production so DB/driver internals are not leaked
+function sendError(res: Response, err: any) {
+  console.error('[Giramichi Server] Request error:', err);
+  const message = process.env.NODE_ENV === 'production' ? 'Internal server error' : err?.message;
+  res.status(500).json({ success: false, error: message });
+}
 
 // Mount HTTP MCP Protocol endpoints
 const httpMcpRouter = createHttpMcpRouter();
@@ -23,6 +32,19 @@ app.use('/api/mcp', httpMcpRouter);
 
 // List of connected SSE clients
 const sseClients: Response[] = [];
+const MAX_SSE_CLIENTS = parseInt(process.env.MAX_SSE_CLIENTS || '200', 10);
+const SSE_HEARTBEAT_MS = 30_000;
+
+// Heartbeat keeps connections alive and prunes dead sockets
+setInterval(() => {
+  for (let i = sseClients.length - 1; i >= 0; i--) {
+    try {
+      sseClients[i].write(': ping\n\n');
+    } catch {
+      sseClients.splice(i, 1);
+    }
+  }
+}, SSE_HEARTBEAT_MS).unref();
 
 // Subscribe DB changes to push SSE updates to frontend
 db.subscribe((event, data) => {
@@ -38,6 +60,9 @@ db.subscribe((event, data) => {
 
 // SSE Endpoint for real-time dashboard updates
 app.get('/api/events', (req: Request, res: Response) => {
+  if (sseClients.length >= MAX_SSE_CLIENTS) {
+    return res.status(503).json({ success: false, error: 'Too many SSE connections' });
+  }
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
@@ -62,7 +87,7 @@ app.get('/api/sessions', async (req: Request, res: Response) => {
     const activeSession = await db.getActiveSession();
     res.json({ success: true, sessions, activeSessionId: activeSession.id });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -77,7 +102,7 @@ app.get('/api/sessions/:id', async (req: Request, res: Response) => {
     const logs = await db.getActivityLogs(50, sessionId);
     res.json({ success: true, session, tasks, logs });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -93,7 +118,7 @@ app.get('/api/board', async (req: Request, res: Response) => {
     const logs = await db.getActivityLogs(20, targetSessionId);
     res.json({ success: true, workflow, sessions, activeSessionId: targetSessionId, tasks, logs });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -103,7 +128,7 @@ app.get('/api/workflows', async (req: Request, res: Response) => {
     const workflows = await db.getWorkflows();
     res.json({ success: true, workflows });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -118,7 +143,7 @@ app.get('/api/tasks/:id', async (req: Request, res: Response) => {
     const logs = (await db.getActivityLogs(100)).filter((l) => l.task_id === taskId);
     res.json({ success: true, task, logs });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -130,7 +155,7 @@ app.get('/api/activity', async (req: Request, res: Response) => {
     const logs = await db.getActivityLogs(limit, sessionId);
     res.json({ success: true, logs });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -150,7 +175,7 @@ app.get('/api/reports', async (req: Request, res: Response) => {
     const reportsData = generateReportsData(tasks, logs, workflow, sessions, sessionId, timeframe);
     res.json({ success: true, reports: reportsData });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -164,7 +189,7 @@ app.post('/api/mcp-direct', authenticateAgent, async (req: Request, res: Respons
     const result = await handleToolCall(name, args || {}, req.agentId, req.createdBy);
     res.json({ success: true, result });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    sendError(res, err);
   }
 });
 
